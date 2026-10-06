@@ -447,7 +447,8 @@ def test_capability_warnings_and_demand_preview(web, env):
     assert preview["alternate_screens"] == ["weather2"]
     by_client = {c["client_id"]: {w["code"] for w in c["warnings"]} for c in preview["clients"]}
     assert by_client["office"] == set()
-    assert by_client["oled"] >= {"no_animation", "no_touch", "monochrome", "small_display"}
+    assert by_client["oled"] >= {"no_animation", "monochrome", "small_display"}
+    assert "no_touch" not in by_client["oled"]
     assert {d["display_profile"] for d in preview["render_demand"]} == {"hyperpixel4", "waveshare_oled_128x64"}
     ad_hoc = web.get(f"/api/playlists/{playlist['id']}/preview?client=ghost").get_json()
     assert ad_hoc["clients"][0]["warnings"][0]["code"] == "unknown_client"
@@ -702,6 +703,18 @@ def test_browser_remove_display(live_server, browser, env):
     page.wait_for_selector("#notice.ok")
     page.wait_for_selector("[data-client-id='office']", state="detached")
     assert env["app"].extensions["desk_display_provisioning"].get("office") is None
+
+
+def test_browser_clients_page_marks_touch_displays(live_server, browser, env):
+    publish_registry(env, [caps("office", has_touch=True), caps("den")])
+    page = browser.new_page()
+    page.goto(f"{live_server}/clients")
+    page.wait_for_selector("[data-client-id='office']")
+    mark = page.query_selector("[data-client-id='office'] .client-summary .touch-mark")
+    assert mark is not None and mark.inner_text().strip() == "👆"
+    assert mark.get_attribute("title") == "Touchscreen"
+    assert page.query_selector("[data-client-id='den'] .client-summary .touch-mark") is None
+    assert "tapped open" not in page.inner_text("#clients")
 
 
 def test_browser_clients_page_shows_delivery_timings(live_server, browser, env):

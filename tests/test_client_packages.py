@@ -288,7 +288,7 @@ def test_fallbacks_are_deterministic_and_explain_themselves():
     still = fallbacks.playback_mode("MLB Scoreboard", supports_animation=False, has_touch=False, color_mode="RGB")
     assert still.mode == fallbacks.STILL and [n[0] for n in still.notes] == ["no_animation"]
     quad = fallbacks.playback_mode("weather quad", supports_animation=True, has_touch=False, color_mode="RGB")
-    assert quad.animated and not quad.expands and quad.notes[0][0] == "no_touch"
+    assert quad.animated and not quad.expands and quad.notes == ()
     touch = fallbacks.playback_mode("weather quad", supports_animation=True, has_touch=True, color_mode="RGB")
     assert touch.expands and touch.notes == ()
     mono = fallbacks.playback_mode("weather radar", supports_animation=True, has_touch=False, color_mode="1")
@@ -306,7 +306,7 @@ def test_assignment_warnings_come_from_the_same_fallbacks():
                              "has_touch": False}}
     document = {"screens": {"MLB Scoreboard": 1, "weather quad": 1, "weather radar": 1}, "sequence": []}
     codes = {w["code"] for w in capability_warnings(document, caps)}
-    assert {"no_animation", "no_touch", "monochrome", "small_display"} <= codes
+    assert {"no_animation", "monochrome", "small_display"} <= codes and "no_touch" not in codes
 
 
 # ── The client: playback, touch focus and offline interaction ──────────────

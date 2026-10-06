@@ -529,6 +529,11 @@ function render(data) {
       if (prefix) summary.appendChild(document.createTextNode(prefix));
       element(summary, index === 0 ? "strong" : "span", "", value);
     });
+    if ((client.capabilities || {}).has_touch) {
+      const touch = element(summary, "span", "touch-mark", " 👆");
+      touch.title = "Touchscreen";
+      touch.setAttribute("aria-label", "Touchscreen");
+    }
 
     if (client.warnings.length) {
       const warnings = element(card, "div", "client-warnings");
