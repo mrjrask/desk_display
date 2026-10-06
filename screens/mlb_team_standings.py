@@ -59,6 +59,15 @@ if _IS_1080P_LAYOUT:
 TEAM_STAND_LOGO_SZ_1080P = _VRNOF_MATCH_LOGO_HEIGHT_1080
 TEAM_STAND1_FONT_OFFSET_1080P = 80
 TEAM_STAND2_FONT_OFFSET_1080P = 40
+# Plain 320x240 panels (Waveshare LCD, the generic fallback): v0.1 drew a
+# ~36px logo (18px on some screens) above text that fills well under half
+# the screen.  Here the logo takes the room the text leaves free; Stand 2
+# lists more lines, so its logo is smaller.  The Display HAT Mini, also
+# 320x240, keeps its own v0.1 sizing.
+_IS_PLAIN_320X240_PANEL = (WIDTH, HEIGHT) == (320, 240) and not _IS_DISPLAY_HAT_MINI
+TEAM_STAND1_LOGO_SZ_320X240 = 100
+TEAM_STAND2_LOGO_SZ_320X240 = 64
+TEAM_STAND3_LOGO_SZ_320X240 = 90
 MARGIN  = scale_value(6)
 FRACTION_FONT_SCALE = 0.6
 _CUBS_STAND3_MARKER_SCALE = 1.8
@@ -332,6 +341,8 @@ def draw_standings_screen1(
         logo_target = LOGO_SZ if logo_size is None else logo_size
         if hawks_logo_size is not None and logo_size is None:
             logo_target = hawks_logo_size
+        if _IS_PLAIN_320X240_PANEL:
+            logo_target = TEAM_STAND1_LOGO_SZ_320X240
         if _IS_1080P_LAYOUT:
             logo_target = min(logo_target, _VRNOF_MATCH_LOGO_HEIGHT_1080)
         logo = fit_logo_to_box(logo_img, logo_target)
@@ -504,6 +515,8 @@ def draw_standings_screen2(
         logo_target = LOGO_SZ if logo_size is None else logo_size
         if hawks_logo_size is not None and logo_size is None:
             logo_target = hawks_logo_size
+        if _IS_PLAIN_320X240_PANEL:
+            logo_target = TEAM_STAND2_LOGO_SZ_320X240
         if _IS_1080P_LAYOUT:
             logo_target = min(logo_target, _VRNOF_MATCH_LOGO_HEIGHT_1080)
         logo = fit_logo_to_box(logo_img, logo_target)
@@ -633,6 +646,8 @@ def draw_standings_screen3(
         logo_target = LOGO_SZ if logo_size is None else logo_size
         if hawks_logo_size is not None and logo_size is None:
             logo_target = hawks_logo_size
+        if _IS_PLAIN_320X240_PANEL:
+            logo_target = TEAM_STAND3_LOGO_SZ_320X240
         if _IS_1080P_LAYOUT:
             logo_target = min(logo_target, _VRNOF_MATCH_LOGO_HEIGHT_1080)
         logo = fit_logo_to_box(logo_img, logo_target)
