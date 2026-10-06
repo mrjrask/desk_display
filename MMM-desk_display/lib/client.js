@@ -5,11 +5,11 @@
  * manifest, heartbeat with demand, and download static PNG artifacts into a local
  * cache, verifying length and SHA-256 before use.
  *
- * Of the render packages, vertical scrolls and logo slides are played: the
- * module keeps each one's image (the full-height canvas, or the logo) and
- * timing, and the browser moves it as a desk_display client would. Other
- * moving screens show their still (the client registers with
- * supports_animation=false, so the Clients page still warns about them). The date and
+ * Every moving screen's render package is played: the module keeps its
+ * images (a scroll's full-height canvas, a logo, animation frames, ticker
+ * strips, quad tiles) and timing, and the browser moves them as a
+ * desk_display client would (playback/package_player.py), so the client
+ * registers with supports_animation=true. The date and
  * nixie clocks are fetched live from a server that offers them
  * (`live_clock_faces`), since a still would show the time it was rendered.
  */
@@ -28,7 +28,10 @@ const MIN_INTERVAL = 5;
 const MAX_INTERVAL = 3600;
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const RENDER_PACKAGE_MEDIA_TYPE = "application/vnd.desk-display.render-package+json";
-const MOTION_KINDS = new Set(["scroll", "animation"]);
+const MOTION_KINDS = new Set(["scroll", "animation", "ticker", "composite"]);
+// Kept motions record which module version judged them; a package an older
+// module kept as unplayable (motion null) is looked at again.
+const MOTION_VERSION = 2;
 const MIN_ADJUSTMENT = -0.9;
 const MAX_ADJUSTMENT = 3;
 
@@ -72,12 +75,36 @@ function decodeAsset (pkg, id) {
 
 const finite = (v) => typeof v === "number" && Number.isFinite(v);
 
-/* What the browser needs from a parsed render package: {motion, image}
- * (image: the PNG to keep), {motion: null} for a kind the module does not
- * play, or {error}. */
+const isColor = (bg) => Array.isArray(bg) && bg.length >= 3 && bg.slice(0, 3).every((c) => Number.isInteger(c) && c >= 0 && c <= 255);
+
+/* [left, top, right, bottom] inside a width x height screen, or null. */
+function bounds (value, width, height) {
+  if (!Array.isArray(value) || value.length !== 4 || !value.every(Number.isInteger)) return null;
+  const [left, top, right, bottom] = value;
+  return left >= 0 && top >= 0 && right > left && bottom > top && right <= width && bottom <= height ? value : null;
+}
+
+/* The images a kept motion needs on disk: scrolls and slides keep one
+ * (`image`), frames, tickers and quads several (`images`). */
+function motionImages (motion) {
+  return motion ? (Array.isArray(motion.images) ? motion.images : [motion.image]) : [];
+}
+
+/* What the browser needs from a parsed render package: {motion, files}
+ * (files: the PNGs to keep, as {sha256, data}), {motion: null} for a kind
+ * the module does not play, or {error}. */
 function motionFromPackage (pkg, width, height) {
   if (!pkg || pkg.type !== "render_package") return { error: "not a render package" };
   if (pkg.width !== width || pkg.height !== height) return { error: "package is for another size" };
+  const files = new Map();
+  /* Decode asset *id*, optionally requiring a size; null when it is bad. */
+  const keep = (id, w = null, h = null) => {
+    const decoded = decodeAsset(pkg, id);
+    if (!decoded || (w !== null && decoded.asset.width !== w) || (h !== null && decoded.asset.height !== h)) return null;
+    files.set(decoded.sha256, decoded.data);
+    return decoded;
+  };
+  const result = (motion) => ({ motion, files: [...files].map(([sha256, data]) => ({ sha256, data })) });
   if (pkg.kind === "scroll") {
     const body = pkg.scroll || {};
     const numbers = ["step_px", "frame_seconds", "pause_start_seconds", "pause_end_seconds"];
@@ -90,6 +117,7 @@ function motionFromPackage (pkg, width, height) {
     if (canvas.asset.width !== width || !(canvas.asset.height > height)) {
       return { error: "canvas must be the screen's width and taller" };
     }
+    files.set(canvas.sha256, canvas.data);
     const motion = {
       kind: "scroll",
       image: canvas.sha256,
@@ -101,28 +129,73 @@ function motionFromPackage (pkg, width, height) {
       direction: body.direction
     };
     if (finite(body.vertical_speed_adjustment)) motion.vertical_speed_adjustment = body.vertical_speed_adjustment;
-    return { motion, image: canvas.data };
+    return result(motion);
   }
   if (pkg.kind === "animation" && pkg.animation && pkg.animation.slide) {
     const slide = pkg.animation.slide;
-    const bg = slide.background;
     if (!finite(slide.speed_px_per_second) || !(slide.speed_px_per_second > 0) || !Number.isInteger(slide.y) ||
-        !Array.isArray(bg) || bg.length < 3 || bg.slice(0, 3).some((c) => !Number.isInteger(c) || c < 0 || c > 255)) {
+        !isColor(slide.background)) {
       return { error: "bad logo slide" };
     }
-    const sprite = decodeAsset(pkg, slide.sprite);
+    const sprite = keep(slide.sprite);
     if (!sprite) return { error: "logo length or hash mismatch" };
-    return {
-      motion: {
-        kind: "slide",
-        image: sprite.sha256,
-        sprite_width: sprite.asset.width,
-        y: slide.y,
-        speed_px_per_second: slide.speed_px_per_second,
-        background: bg.slice(0, 3)
-      },
-      image: sprite.data
-    };
+    return result({
+      kind: "slide",
+      image: sprite.sha256,
+      sprite_width: sprite.asset.width,
+      y: slide.y,
+      speed_px_per_second: slide.speed_px_per_second,
+      background: slide.background.slice(0, 3)
+    });
+  }
+  if (pkg.kind === "animation" && pkg.animation && Array.isArray(pkg.animation.frames)) {
+    const { frames, loops } = pkg.animation;
+    if (frames.length < 2 || !Number.isInteger(loops) || loops < 1 ||
+        frames.some((f) => !f || !Number.isInteger(f.duration_ms) || f.duration_ms < 0)) {
+      return { error: "bad frame animation" };
+    }
+    const shas = frames.map((f) => keep(f.asset, width, height));
+    if (shas.some((f) => !f)) return { error: "frame length, hash or size mismatch" };
+    const images = shas.map((f) => f.sha256);
+    return result({ kind: "frames", images, durations_ms: frames.map((f) => f.duration_ms), loops });
+  }
+  if (pkg.kind === "ticker") {
+    const body = pkg.ticker || {};
+    if (!finite(body.duration_seconds) || body.duration_seconds < 0 || !Array.isArray(body.lanes) || !body.lanes.length) {
+      return { error: "bad ticker" };
+    }
+    const base = keep(body.base, width, height);
+    if (!base) return { error: "ticker base length, hash or size mismatch" };
+    const lanes = [];
+    for (const lane of body.lanes) {
+      const box = lane && bounds(lane.bounds, width, height);
+      if (!box || !finite(lane.speed_px_per_second) || !finite(lane.offset_px)) return { error: "bad ticker lane" };
+      const strip = keep(lane.strip, null, box[3] - box[1]);
+      if (!strip || !(strip.asset.width > 0)) return { error: "ticker strip length, hash or size mismatch" };
+      lanes.push({ bounds: box, strip: strip.sha256, strip_width: strip.asset.width,
+        speed_px_per_second: lane.speed_px_per_second, offset_px: lane.offset_px });
+    }
+    return result({ kind: "ticker", images: [...files.keys()], base: base.sha256,
+      duration_seconds: body.duration_seconds, lanes });
+  }
+  if (pkg.kind === "composite") {
+    const body = pkg.composite || {};
+    if (!finite(body.frame_seconds) || !(body.frame_seconds > 0) || !finite(body.duration_seconds) ||
+        body.duration_seconds < 0 || !Array.isArray(body.tiles) || !body.tiles.length) {
+      return { error: "bad quad" };
+    }
+    const base = keep(body.base, width, height);
+    if (!base) return { error: "quad base length, hash or size mismatch" };
+    const tiles = [];
+    for (const tile of body.tiles) {
+      const box = tile && bounds(tile.bounds, width, height);
+      if (!box || !Array.isArray(tile.frames) || !tile.frames.length) return { error: "bad quad tile" };
+      const frames = tile.frames.map((id) => keep(id, box[2] - box[0], box[3] - box[1]));
+      if (frames.some((f) => !f)) return { error: "quad tile length, hash or size mismatch" };
+      tiles.push({ bounds: box, frames: frames.map((f) => f.sha256) });
+    }
+    return result({ kind: "composite", images: [...files.keys()], base: base.sha256,
+      frame_seconds: body.frame_seconds, duration_seconds: body.duration_seconds, tiles });
   }
   return { motion: null };
 }
@@ -252,7 +325,7 @@ class DeskDisplayClient {
       image_formats: ["PNG"],
       color_modes: [this.colorMode],
       render_package_versions: RENDER_PACKAGE_VERSIONS,
-      supports_animation: false,
+      supports_animation: true,
       has_touch: false,
       buttons: [],
       hardware: { model: "MagicMirror", driver: "MMM-desk_display" }
@@ -275,7 +348,7 @@ class DeskDisplayClient {
       package_capabilities: {
         render_package_versions: RENDER_PACKAGE_VERSIONS,
         image_formats: ["PNG"],
-        supports_animation: false,
+        supports_animation: true,
         max_package_bytes: MAX_ARTIFACT_BYTES
       },
       sync_interval_seconds: Math.round(this.syncInterval(30))
@@ -496,12 +569,13 @@ class DeskDisplayClient {
   _readMotion (packageSha256) {
     try {
       const kept = JSON.parse(fs.readFileSync(this.motionFile(packageSha256), "utf8"));
-      return kept.motion === null || fs.existsSync(this.artifactFile(kept.motion.image)) ? kept : null;
+      if (kept.motion === null && kept.version !== MOTION_VERSION) return null;
+      return motionImages(kept.motion).every((sha) => fs.existsSync(this.artifactFile(sha))) ? kept : null;
     } catch { return null; }
   }
 
-  /* Download each new scroll or logo-slide package and keep its image and
-   * timing. A package that fails leaves its screen on the still. */
+  /* Download each new render package the module plays and keep its images
+   * and timing. A package that fails leaves its screen on the still. */
   async _downloadMotions (manifest) {
     for (const entry of this._motionEntries(manifest)) {
       const pkg = entry.package;
@@ -525,17 +599,17 @@ class DeskDisplayClient {
       }
       let parsed;
       try { parsed = JSON.parse(data.toString("utf8")); } catch { parsed = null; }
-      const { motion, image, error } = motionFromPackage(parsed, this.width, this.height);
+      const { motion, files, error } = motionFromPackage(parsed, this.width, this.height);
       if (error) {
         this.noteError(new SyncError("package_invalid", `${entry.screen_id} package: ${error}`));
         continue;
       }
-      if (motion) {
-        const target = this.artifactFile(motion.image);
-        fs.writeFileSync(`${target}.tmp`, image, { mode: 0o644 });
+      for (const file of files || []) {
+        const target = this.artifactFile(file.sha256);
+        fs.writeFileSync(`${target}.tmp`, file.data, { mode: 0o644 });
         fs.renameSync(`${target}.tmp`, target);
       }
-      this._writeAtomic(path.join("artifacts", `${pkg.sha256}.motion.json`), JSON.stringify({ motion }), 0o644);
+      this._writeAtomic(path.join("artifacts", `${pkg.sha256}.motion.json`), JSON.stringify({ version: MOTION_VERSION, motion }), 0o644);
     }
   }
 
@@ -591,7 +665,7 @@ class DeskDisplayClient {
       const kept = this._readMotion(entry.package.sha256);
       if (!kept) continue;
       keep.add(`${entry.package.sha256}.motion.json`);
-      if (kept.motion) keep.add(`${kept.motion.image}.png`);
+      for (const sha of motionImages(kept.motion)) keep.add(`${sha}.png`);
     }
     for (const name of fs.readdirSync(this.artifactDir)) {
       if (!keep.has(name)) fs.rmSync(path.join(this.artifactDir, name), { force: true });
@@ -673,6 +747,22 @@ class DeskDisplayClient {
             y: motion.y,
             speedPxPerSecond: motion.speed_px_per_second,
             background: motion.background
+          };
+        } else if (motion && motion.kind === "frames") {
+          image.frames = { sha256s: motion.images, durationsMs: motion.durations_ms, loops: motion.loops };
+        } else if (motion && motion.kind === "ticker") {
+          image.ticker = {
+            base: motion.base,
+            durationSeconds: motion.duration_seconds,
+            lanes: motion.lanes.map((lane) => ({ bounds: lane.bounds, strip: lane.strip, stripWidth: lane.strip_width,
+              speedPxPerSecond: lane.speed_px_per_second, offsetPx: lane.offset_px }))
+          };
+        } else if (motion && motion.kind === "composite") {
+          image.composite = {
+            base: motion.base,
+            frameSeconds: motion.frame_seconds,
+            durationSeconds: motion.duration_seconds,
+            tiles: motion.tiles.map((tile) => ({ bounds: tile.bounds, frames: tile.frames }))
           };
         }
         images[entry.screen_id] = image;

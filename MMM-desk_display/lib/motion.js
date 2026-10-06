@@ -1,5 +1,6 @@
-/* Motion for MMM-desk_display: vertical scrolls and the date face's colour
- * cycle, timed as a desk_display client times them
+/* Motion for MMM-desk_display: vertical scrolls, logo slides, frame
+ * animations, tickers, quads and the date face's colour cycle, timed as a
+ * desk_display client times them
  * (playback/package_player.py, screens/draw_date_time.py).
  *
  * Shared by the browser module (global DeskDisplayMotion) and the tests.
@@ -49,6 +50,50 @@
     return Math.trunc(direction === "ltr" ? -slide.spriteWidth + travelled : viewportWidth - travelled);
   }
 
+  /* How long a frame animation lasts, all its loops included. */
+  function framesSeconds (frames) {
+    return frames.durationsMs.reduce((sum, ms) => sum + ms, 0) / 1000 * frames.loops;
+  }
+
+  /* Which frame shows at *t*, as PackagePlayback._frame_index: it loops,
+   * then holds the last frame. */
+  function frameIndex (frames, t) {
+    const durations = frames.durationsMs;
+    const loop = durations.reduce((sum, ms) => sum + ms, 0) / 1000;
+    if (loop <= 0 || t >= loop * frames.loops) return durations.length - 1;
+    let left = t % loop;
+    for (let i = 0; i < durations.length; i += 1) {
+      left -= durations[i] / 1000;
+      if (left < 0) return i;
+    }
+    return durations.length - 1;
+  }
+
+  /* How far a ticker lane's looping strip has moved at *t*, in pixels. */
+  function tickerOffset (lane, t) {
+    const travelled = Math.trunc(lane.offsetPx + lane.speedPxPerSecond * t);
+    return ((travelled % lane.stripWidth) + lane.stripWidth) % lane.stripWidth;
+  }
+
+  /* Each quad tile's frame at *t*: every tile steps on the same beat. */
+  function compositeFrames (composite, t) {
+    const step = Math.trunc(t / Math.max(0.03, composite.frameSeconds));
+    return composite.tiles.map((tile) => step % tile.frames.length);
+  }
+
+  /* How long a screen stays on show for a playlist hold of *hold* seconds,
+   * as PackagePlayback.duration: a finite motion (scroll, logo, frames) plays
+   * and then holds; a ticker or quad runs for its own window or the hold,
+   * whichever is longer. */
+  function showSeconds (image, width, height, hold) {
+    if (image.scroll) return scrollSeconds(image.scroll, height) + hold;
+    if (image.slide) return slideSeconds(image.slide, width) + hold;
+    if (image.frames) return framesSeconds(image.frames) + hold;
+    if (image.ticker) return Math.max(image.ticker.durationSeconds, hold);
+    if (image.composite) return Math.max(image.composite.durationSeconds, hold);
+    return hold;
+  }
+
   /* {interval, steps} of the date face's colour cycle, as
    * draw_date_time._color_cycle_profile with SCREEN_DELAY = *screenSeconds*:
    * fresh colours every interval for *steps* redraws, then they hold. */
@@ -81,5 +126,8 @@
     return [255, 255, 255];
   }
 
-  return { brightColor, colorCycle, scrollDone, scrollOffset, scrollSeconds, slideSeconds, slideX };
+  return {
+    brightColor, colorCycle, compositeFrames, frameIndex, framesSeconds, scrollDone, scrollOffset, scrollSeconds,
+    showSeconds, slideSeconds, slideX, tickerOffset
+  };
 }));

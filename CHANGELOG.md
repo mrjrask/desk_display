@@ -9,6 +9,11 @@ clients, or both on one machine, alongside the unchanged standalone install.
 See the README's [deployment modes](README.md#deployment-modes) and
 [OPERATIONS.md](OPERATIONS.md) for installing, upgrading and rolling back.
 
+- The MagicMirror² module (MMM-desk_display) now animates every moving
+  screen: weather radar and the league overviews loop their frames, news
+  tickers scroll, and quads step their tiles, as on a desk_display client.
+  It registers with `supports_animation: true`, so the Clients page no
+  longer warns that its screens show their still image.
 - Upgrades keep a display client you switched off off:
   `update_services.sh` (run by `upgrade.sh` and the Clients page's Upgrade)
   no longer re-enables a disabled `desk_display_client.service` (or any other
