@@ -15,7 +15,9 @@ Condition              Result
 no animation support   ``still``: moving screens show their still image
                        (clocks are drawn locally either way)
 no touchscreen         interactive quads play (still or animated), but a
-                       tap does not open a tile (``expands`` is false)
+                       tap does not open a tile (``expands`` is false);
+                       no note, since the Clients page marks touch
+                       displays with a 👆 instead
 one-bit display        colour-dependent screens play, with a warning
 otherwise              ``full``
 =====================  =================================================
@@ -58,8 +60,6 @@ def playback_mode(screen_id: str, *, supports_animation: bool, has_touch: bool,
     if entry.kind in _MOVING and not supports_animation:
         mode = STILL
         notes.append(("no_animation", "warning", "shows its still image; the client does not animate"))
-    if entry.interactive and not has_touch:
-        notes.append(("no_touch", "info", "tiles cannot be tapped open without a touchscreen"))
     if color_mode == "1" and screen_id in screen_classes.COLOR_DEPENDENT:
         notes.append(("monochrome", "warning", "depends on colour; a one-bit display loses detail"))
     return Fallback(screen_id, mode, entry.interactive and has_touch, tuple(notes))
