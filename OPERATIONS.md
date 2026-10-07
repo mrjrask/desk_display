@@ -711,8 +711,8 @@ processes and storage, without per-thread and per-display figures.
 To see every version of each screen side by side, open the **Live** page on
 the server's config UI (`http://square.local:5002/live`). It shows the same
 thing as the collector script below, kept current: one heading per screen
-with each online display's latest screenshot under it at the display's own
-shape, labelled with its name, profile, size and how long ago it was
+with each online display's latest screenshot of it on one row (scroll
+sideways when they don't fit) at the display's own shape, labelled with its name, profile, size and how long ago it was
 captured. It refreshes every 5 seconds without reloading, and only swaps an
 image when the display has captured a newer one. **Group by Display** lists
 each display's screens instead, **S / M / L** sizes the tiles, a click shows
