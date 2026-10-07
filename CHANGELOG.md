@@ -18,6 +18,9 @@ See the README's [deployment modes](README.md#deployment-modes) and
   4 seconds, and a display that does not answer is retried after 20),
   proxies the images, cached by capture time, reads its own panel directly,
   and falls back to the screenshots a display on another network uploads.
+  Per-display **Displays** chips and **Show hidden** (remembered in the
+  browser) hide displays you don't want; MagicMirror displays, which never
+  have screenshots, start hidden and are no longer queried.
   Linked from every page's navigation on servers.
 - New **pi remote temp** screen: the CPU temperatures of the LAN's
   Raspberry Pis, drawn like the MMM-RemoteTempMonitor MagicMirror module

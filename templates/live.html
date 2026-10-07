@@ -14,6 +14,9 @@
     .toolbar label { font-size: 0.85rem; display: flex; gap: 0.35rem; align-items: center; }
     #updated { font-size: 0.82rem; }
     #updated.late { color: #fde68a; }
+    #devices-bar[hidden] { display: none; }
+    .chips { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+    .chips button[aria-pressed="false"] { opacity: 0.55; text-decoration: line-through; }
     .notes { margin: 0.6rem 0 0; padding: 0; list-style: none; font-size: 0.85rem; display: grid; gap: 0.2rem; }
     .notes .warn { color: #fecaca; }
     .jump { display: flex; flex-wrap: wrap; gap: 0.3rem 0.8rem; font-size: 0.82rem; margin-top: 0.7rem; }
@@ -81,6 +84,11 @@
       <span id="updated" class="muted" aria-live="polite">Loading…</span>
       <button type="button" id="pause" aria-pressed="false">Pause</button>
     </div>
+    <div class="toolbar" id="devices-bar" hidden>
+      <span class="muted small">Displays</span>
+      <span class="chips" id="devices" role="group" aria-label="Show or hide displays"></span>
+      <label><input type="checkbox" id="show-hidden"> Show hidden</label>
+    </div>
     <ul class="notes" id="notes"></ul>
     <nav class="jump" id="jump" aria-label="Jump to"></nav>
   </div>
@@ -105,6 +113,11 @@
     let groupBy = store.get("live.groupBy", "screen");
     let tileH = Number(store.get("live.tileH", "240")) || 240;
     let includeAll = store.get("live.includeAll", "0") === "1";
+    let showHidden = store.get("live.showHidden", "0") === "1";
+    // Per-display choice: {client_id: "show" | "hide"}. No entry follows the default (MagicMirror hidden).
+    let choices = {};
+    try { choices = JSON.parse(store.get("live.visibility", "{}")) || {}; } catch (e) { choices = {}; }
+    const isHidden = (d) => choices[d.client_id] === "hide" || (choices[d.client_id] !== "show" && Boolean(d.magicmirror));
     let paused = false, timer = null, data = null, skew = 0, lastOk = 0, lastError = null;
     const figures = new Map();
     const $ = (id) => document.getElementById(id);
@@ -190,16 +203,36 @@
       return best;
     }
 
+    function renderDevices(everyone) {
+      $("devices-bar").hidden = !everyone.length;
+      $("devices").replaceChildren(...everyone.map((d) => {
+        const b = document.createElement("button");
+        b.type = "button"; b.dataset.id = d.client_id;
+        b.setAttribute("aria-pressed", String(!isHidden(d)));
+        b.title = (isHidden(d) ? "Hidden" : "Shown") + (d.magicmirror ? " (MagicMirror: no screenshots)" : "") + " - click to toggle";
+        b.textContent = d.label;
+        b.addEventListener("click", () => {
+          choices[d.client_id] = isHidden(d) ? "show" : "hide";
+          store.set("live.visibility", JSON.stringify(choices)); render();
+        });
+        return b;
+      }));
+    }
+
     function render() {
       if (!data) return;
       document.documentElement.style.setProperty("--tile-h", tileH + "px");
-      const displays = data.displays || [];
+      const everyone = data.displays || [];
+      const displays = showHidden ? everyone : everyone.filter((d) => !isHidden(d));
       const live = displays.filter((d) => !d.error);
+      renderDevices(everyone);
       const notes = [];
       for (const d of displays) if (d.error) notes.push(`<li class="warn">${esc(d.label)}: ${esc(d.error)}</li>`);
       for (const d of displays) if (d.note) notes.push(`<li>${esc(d.label)}: ${esc(d.note)}</li>`);
       for (const s of data.skipped || []) notes.push(`<li class="muted">Not shown: ${esc(s.label)} (${esc(s.state || "unknown")})</li>`);
-      if (!displays.length) notes.push('<li class="muted">No display is online. Tick "Include offline displays" to try the rest.</li>');
+      const hiddenCount = everyone.length - displays.length;
+      if (hiddenCount) notes.push(`<li class="muted">${hiddenCount} hidden display${hiddenCount === 1 ? "" : "s"}. Tick "Show hidden" or use the chips above to bring them back.</li>`);
+      if (!displays.length && !hiddenCount) notes.push('<li class="muted">No display is online. Tick "Include offline displays" to try the rest.</li>');
       $("notes").innerHTML = notes.join("");
 
       const used = new Set();
@@ -294,6 +327,10 @@
     document.querySelectorAll("[data-size]").forEach((b) => b.addEventListener("click", () => {
       tileH = Number(b.dataset.size); store.set("live.tileH", String(tileH)); press("[data-size]", "size", tileH); render();
     }));
+    $("show-hidden").checked = showHidden;
+    $("show-hidden").addEventListener("change", (e) => {
+      showHidden = e.target.checked; store.set("live.showHidden", showHidden ? "1" : "0"); render();
+    });
     $("include-all").checked = includeAll;
     $("include-all").addEventListener("change", (e) => {
       includeAll = e.target.checked; store.set("live.includeAll", includeAll ? "1" : "0"); poll();

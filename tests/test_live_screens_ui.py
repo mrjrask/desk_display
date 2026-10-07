@@ -200,3 +200,18 @@ def test_image_proxy_rejects_a_non_image_answer(setup):
     client, _ = setup([row("hyper", "10.0.0.12")], {"10.0.0.12": hyper})
     url = client.get("/api/live").get_json()["displays"][0]["screens"]["date"]["url"]
     assert client.get(url).status_code == 502
+
+
+def test_magicmirror_display_is_flagged_and_never_fetched(setup):
+    mirror = row("mirror", "10.0.0.20", capabilities={"hardware": {"model": "MagicMirror", "driver": "MMM-desk_display"}})
+    hyper = FakeUI({"screens": [entry("clock", "clock.png")]}, {"clock.png": PNG})
+    client, _ = setup([mirror, row("hyper", "10.0.0.12")], {"10.0.0.12": hyper})
+    shown = {d["client_id"]: d for d in client.get("/api/live").get_json()["displays"]}
+    assert shown["mirror"]["magicmirror"] is True and shown["mirror"]["error"] is None
+    assert shown["mirror"]["screens"] == {} and shown["hyper"]["magicmirror"] is False
+
+
+def test_page_has_per_display_show_hide_controls(setup):
+    client, _ = setup([], {})
+    html = client.get("/live").get_data(as_text=True)
+    assert 'id="show-hidden"' in html and "live.visibility" in html and "d.magicmirror" in html
