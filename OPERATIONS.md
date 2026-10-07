@@ -721,6 +721,12 @@ that are not online, and **Pause** stops refreshing. The **Now on each
 display** row shows the screen each display last reported in its heartbeat
 (marked "on screen"), or its newest screenshot.
 
+The **Displays** chips under the toolbar show or hide each display (click a
+chip; a struck-through chip is hidden), and **Show hidden** brings every
+hidden display back at once. The choice is remembered in that browser only.
+MagicMirror displays never have screenshots or system stats, so they start
+hidden; click their chip to show one anyway.
+
 How current it is: a display saves a screenshot when it shows a screen, so
 a screen's tile is as old as the last time that screen played. The server
 fetches each display's list at most every 4 seconds (shared by everyone

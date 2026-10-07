@@ -115,6 +115,12 @@ def _size(dimensions: Any) -> tuple[int | None, int | None]:
         return None, None
 
 
+def _is_magicmirror(row: Mapping[str, Any]) -> bool:
+    """The MagicMirror module registers as hardware model "MagicMirror"; it never has screenshots."""
+    hardware = (row.get("capabilities") or {}).get("hardware")
+    return isinstance(hardware, Mapping) and str(hardware.get("model") or "").lower() == "magicmirror"
+
+
 def _is_local(row: Mapping[str, Any]) -> bool:
     """The server's own panel (combined mode) reaches the server over loopback."""
 
@@ -234,6 +240,8 @@ def register(
             "height": height,
             "state": row.get("state"),
             "current_screen": row.get("current_screen"),
+            # Shows images only: no screenshots or system stats, so the page hides it by default.
+            "magicmirror": _is_magicmirror(row),
             "error": None,
             "note": None,
             "fetched_at": None,
@@ -246,6 +254,8 @@ def register(
                 result["fetched_at"] = now()
             except Exception as exc:  # noqa: BLE001 - one display's failure stays on its tile
                 result["error"] = f"could not read this machine's screenshots ({_reason(exc)})"
+        elif result["magicmirror"]:
+            result["fetched_at"] = now()  # nothing to fetch: the module has no screenshot endpoint
         else:
             listing = listing_for(row)
             result["fetched_at"] = listing.fetched_at
