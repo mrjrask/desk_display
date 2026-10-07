@@ -32,6 +32,7 @@ from flask import (
 
 import config
 import deployment_config
+import live_screens_ui
 import remote_playlists_ui
 import stats_ui
 from config import CENTRAL_TIME
@@ -1970,6 +1971,11 @@ remote_playlists_ui.register(
     editor_document=_playlist_document_from_editor,
 )
 stats_ui.register(app, panel_cache_dir=lambda: _panel_cache_dir(Path(__file__).resolve().parent))
+live_screens_ui.register(
+    app,
+    client_rows=lambda: app.extensions["desk_display_client_rows"](),
+    local_entries=_build_screenshot_entries,
+)
 
 
 if __name__ == "__main__":

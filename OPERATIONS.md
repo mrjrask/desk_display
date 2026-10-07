@@ -185,7 +185,7 @@ run the installer with your normal login and let it call `sudo` itself.
 | `cleanup.sh` | Manual maintenance: stops and blanks the panel, removes `__pycache__`, archives leftover screenshots and video. |
 | `convert_env.py` | Converts a `.env` to the server or client role (see [Converting an existing .env](#converting-an-existing-env)). |
 | `migrate_standalone_config.py` | Moves a standalone rotation onto the server as a playlist (see [Moving a standalone rotation onto the server](#moving-a-standalone-rotation-onto-the-server)). |
-| `collect_client_screenshots.py` | Gathers every display's latest screenshots into one HTML page (see [Comparing screens across displays](#comparing-screens-across-displays)). |
+| `collect_client_screenshots.py` | Gathers every display's latest screenshots into one HTML page; the config UI's Live page shows the same, kept current (see [Comparing screens across displays](#comparing-screens-across-displays)). |
 | `measure_scroll_fps.py` | Measures scroll smoothness on a client's panel (see [Checking scroll smoothness](#checking-scroll-smoothness)). |
 | `test_led.py` | Cycles the Display HAT Mini's RGB LED and reports whether it responded; stop the display service first. |
 | `test_api_connections.py` | Probes every external API family; `--json` for machine-readable output. |
@@ -708,8 +708,32 @@ processes and storage, without per-thread and per-display figures.
 
 ### Comparing screens across displays
 
-To see every version of each screen side by side, run this from any
-computer on the LAN (only Python 3 is needed):
+To see every version of each screen side by side, open the **Live** page on
+the server's config UI (`http://square.local:5002/live`). It shows the same
+thing as the collector script below, kept current: one heading per screen
+with each online display's latest screenshot of it on one row (scroll
+sideways when they don't fit) at the display's own shape, labelled with its name, profile, size and how long ago it was
+captured. It refreshes every 5 seconds without reloading, and only swaps an
+image when the display has captured a newer one. **Group by Display** lists
+each display's screens instead, **S / M / L** sizes the tiles, a click shows
+a screenshot at full size, **Include offline displays** also tries displays
+that are not online, and **Pause** stops refreshing. The **Now on each
+display** row shows the screen each display last reported in its heartbeat
+(marked "on screen"), or its newest screenshot.
+
+How current it is: a display saves a screenshot when it shows a screen, so
+a screen's tile is as old as the last time that screen played. The server
+fetches each display's list at most every 4 seconds (shared by everyone
+with the page open) and leaves a display that did not answer alone for 20
+seconds; its error is listed at the top. Ages turn amber after 30 minutes
+and red after 2 hours. A display on another network shows the screenshots it
+uploads (see below), tagged "uploaded"; those arrive every 10 minutes by
+default, so they are older. The server reaches each display on the same port
+as its own config UI (`SCREEN_CONFIG_PORT`), and if the displays' config UIs
+have a password it sends its own `SCREEN_UI_USERNAME`/`SCREEN_UI_PASSWORD`.
+
+To save a copy you can share, run the collector from any computer on the
+LAN (only Python 3 is needed):
 
 ```bash
 python3 scripts/collect_client_screenshots.py --server square.local
@@ -762,11 +786,12 @@ uses:
    `DESK_DISPLAY_SCREENSHOT_UPLOAD_*` settings in `.env.server.example`).
    The server must be running this release or later; restart it after
    upgrading so it advertises uploads.
-3. Run the collector as usual. When a display can't be reached it uses the
-   screenshots that display uploaded (listed on the server's config UI at
-   `/api/clients/<id>/uploaded-screenshots`), and it also fills in any
-   screen a reachable display did not return. Uploaded screenshots are
-   captioned "uploaded to server".
+3. Open the Live page or run the collector as usual. When a display can't
+   be reached they use the screenshots that display uploaded (listed on the
+   server's config UI at `/api/clients/<id>/uploaded-screenshots`), and they
+   also fill in any screen a reachable display did not return. Uploaded
+   screenshots are tagged "uploaded" on the Live page and captioned
+   "uploaded to server" by the collector.
 
 To check uploads are arriving, look on the server:
 

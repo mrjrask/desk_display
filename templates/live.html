@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ machine_hostname }} - Live</title>
+  {% include "_remote_style.html" %}
+  <style>
+    .panel.wide { max-width: 1600px; }
+    .toolbar { display: flex; gap: 0.6rem 1rem; align-items: center; flex-wrap: wrap; }
+    .toolbar .group { display: flex; gap: 0.35rem; align-items: center; }
+    .toolbar button { font-size: 0.82rem; padding: 0.3rem 0.75rem; border-radius: 999px; }
+    .toolbar button[aria-pressed="true"] { border-color: #38bdf8; background: rgba(56, 189, 248, 0.12); }
+    .toolbar label { font-size: 0.85rem; display: flex; gap: 0.35rem; align-items: center; }
+    #updated { font-size: 0.82rem; }
+    #updated.late { color: #fde68a; }
+    .notes { margin: 0.6rem 0 0; padding: 0; list-style: none; font-size: 0.85rem; display: grid; gap: 0.2rem; }
+    .notes .warn { color: #fecaca; }
+    .jump { display: flex; flex-wrap: wrap; gap: 0.3rem 0.8rem; font-size: 0.82rem; margin-top: 0.7rem; }
+    .jump a { color: #93c5fd; text-decoration: none; }
+    section.group-block + section.group-block { margin-top: 1.4rem; }
+    section.group-block h2 { display: flex; gap: 0.5rem; align-items: baseline; flex-wrap: wrap;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.2); padding-bottom: 0.4rem; scroll-margin-top: 1rem; }
+    section.group-block h2 .muted { font-size: 0.8rem; font-weight: 400; }
+    /* One row per screen (or display): tiles never wrap, the row scrolls sideways. */
+    .tiles { display: flex; flex-wrap: nowrap; gap: 0.9rem; align-items: flex-start; overflow-x: auto; padding-bottom: 0.4rem; }
+    figure.shot {
+      margin: 0; padding: 0.55rem; border-radius: 12px; flex: 0 0 auto; width: min-content;
+      border: 1px solid rgba(148, 163, 184, 0.2); background: rgba(30, 41, 59, 0.45);
+    }
+    figure.shot.now { border-color: #38bdf8; }
+    figure.shot img {
+      display: block; background: #000; border-radius: 4px; cursor: zoom-in; object-fit: contain;
+      height: var(--tile-h, 240px); width: auto; max-width: none;
+    }
+    figure.shot img.full { height: auto; max-height: none; cursor: zoom-out; }
+    figure.shot .empty {
+      display: grid; place-items: center; height: var(--tile-h, 240px); color: #94a3b8; font-size: 0.8rem;
+      background: rgba(15, 23, 42, 0.8); border-radius: 4px;
+    }
+    figcaption { margin-top: 0.4rem; font-size: 0.82rem; line-height: 1.35; min-width: 12rem; overflow-wrap: anywhere; }
+    figcaption b { display: block; font-size: 0.88rem; }
+    .age.fresh { color: #bbf7d0; }
+    .age.old { color: #fde68a; }
+    .age.stale { color: #fecaca; }
+    .tag { display: inline-block; font-size: 0.7rem; padding: 0 0.4rem; border-radius: 999px; margin-left: 0.25rem;
+      border: 1px solid rgba(148, 163, 184, 0.4); color: #cbd5e1; vertical-align: 1px; }
+    .tag.now { border-color: #38bdf8; color: #bae6fd; }
+    figure.shot .hidden { display: none; }
+    @media (max-width: 600px) { figure.shot img, figure.shot .empty { height: min(var(--tile-h, 240px), 160px); } }
+  </style>
+</head>
+<body>
+  <h1>Live Displays</h1>
+  <div class="subtitle">Every display's latest screenshot of each screen, refreshed every {{ poll_seconds }} seconds. Click a screenshot to see it at full size.</div>
+  <nav class="nav-links">
+    <a href="/">Rotation Config</a>
+    <a href="/screenshots">Screenshots</a>
+    <a href="/feed">Feed</a>
+    <a href="/playlists">Playlists</a>
+    <a href="/clients">Clients</a>
+    <a href="/live" aria-current="page">Live</a>
+    <a href="/stats">Stats</a>
+  </nav>
+
+  <div class="panel wide">
+    <div class="toolbar">
+      <div class="group" role="group" aria-label="Group by">
+        <span class="muted small">Group by</span>
+        <button type="button" data-group="screen" aria-pressed="true">Screen</button>
+        <button type="button" data-group="display" aria-pressed="false">Display</button>
+      </div>
+      <div class="group" role="group" aria-label="Tile size">
+        <span class="muted small">Size</span>
+        <button type="button" data-size="160" aria-pressed="false">S</button>
+        <button type="button" data-size="240" aria-pressed="true">M</button>
+        <button type="button" data-size="360" aria-pressed="false">L</button>
+      </div>
+      <label><input type="checkbox" id="include-all"> Include offline displays</label>
+      <span class="spacer"></span>
+      <span id="updated" class="muted" aria-live="polite">Loading…</span>
+      <button type="button" id="pause" aria-pressed="false">Pause</button>
+    </div>
+    <ul class="notes" id="notes"></ul>
+    <nav class="jump" id="jump" aria-label="Jump to"></nav>
+  </div>
+
+  <div class="panel wide">
+    <section class="group-block">
+      <h2>Now on each display <span class="muted">the screen each display last reported, else its newest screenshot</span></h2>
+      <div class="tiles" id="now"></div>
+    </section>
+  </div>
+
+  <div class="panel wide" id="groups"></div>
+
+  <script>
+  (() => {
+    const POLL_MS = {{ poll_seconds|int }} * 1000;
+    const FRESH = 5 * 60, OLD = 30 * 60, STALE = 2 * 60 * 60;
+    const store = {
+      get(key, fallback) { try { return localStorage.getItem(key) ?? fallback; } catch (e) { return fallback; } },
+      set(key, value) { try { localStorage.setItem(key, value); } catch (e) { /* private mode */ } },
+    };
+    let groupBy = store.get("live.groupBy", "screen");
+    let tileH = Number(store.get("live.tileH", "240")) || 240;
+    let includeAll = store.get("live.includeAll", "0") === "1";
+    let paused = false, timer = null, data = null, skew = 0, lastOk = 0, lastError = null;
+    const figures = new Map();
+    const $ = (id) => document.getElementById(id);
+
+    const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+    const serverNow = () => Date.now() / 1000 + skew;
+    function ago(seconds) {
+      if (seconds == null || !isFinite(seconds)) return "";
+      seconds = Math.max(0, Math.round(seconds));
+      if (seconds < 60) return `${seconds}s ago`;
+      const m = Math.floor(seconds / 60);
+      if (m < 60) return `${m}m ${seconds % 60}s ago`;
+      const h = Math.floor(m / 60);
+      if (h < 48) return `${h}h ${m % 60}m ago`;
+      return `${Math.floor(h / 24)}d ${h % 24}h ago`;
+    }
+    const ageClass = (s) => s == null ? "" : s < FRESH ? "fresh" : s < OLD ? "" : s < STALE ? "old" : "stale";
+    const anchor = (prefix, id) => prefix + "-" + String(id).toLowerCase().replace(/[^a-z0-9]+/g, "-");
+
+    function figure(key) {
+      let fig = figures.get(key);
+      if (!fig) {
+        fig = document.createElement("figure");
+        fig.className = "shot";
+        fig.innerHTML = '<img alt="" decoding="async"><div class="empty hidden"></div><figcaption></figcaption>';
+        fig.querySelector("img").addEventListener("click", (e) => e.target.classList.toggle("full"));
+        figures.set(key, fig);
+      }
+      return fig;
+    }
+
+    function fillFigure(fig, display, shot, title, isNow) {
+      const img = fig.querySelector("img");
+      const empty = fig.querySelector(".empty");
+      const ratio = display.width && display.height ? display.width / display.height : null;
+      if (shot) {
+        if (img.getAttribute("src") !== shot.url) img.setAttribute("src", shot.url);
+        img.alt = `${shot.screen} on ${display.label}`;
+        if (display.width && display.height) { img.width = display.width; img.height = display.height; }
+        img.classList.remove("hidden"); empty.classList.add("hidden");
+      } else {
+        img.classList.add("hidden"); empty.classList.remove("hidden");
+        empty.textContent = display.error || "No screenshot yet";
+        empty.style.aspectRatio = ratio ? String(ratio) : "4 / 3";
+      }
+      const detail = [display.display_profile, display.dimensions].filter(Boolean).join(" · ");
+      fig.classList.toggle("now", Boolean(isNow));
+      fig.dataset.captured = shot && shot.captured_at != null ? shot.captured_at : "";
+      fig.dataset.stale = "";
+      const tags = (isNow ? '<span class="tag now">on screen</span>' : "")
+        + (shot && shot.uploaded ? '<span class="tag" title="Sent by the display to the server every few minutes">uploaded</span>' : "")
+        + (display.state === "stale" ? '<span class="tag">heartbeat late</span>' : "");
+      fig.querySelector("figcaption").innerHTML =
+        `<b>${esc(title)}${tags}</b><span class="muted">${esc(detail)}</span><br><span class="age"></span>`;
+    }
+
+    function tickAges() {
+      const now = serverNow();
+      for (const fig of figures.values()) {
+        const el = fig.querySelector(".age");
+        if (!el) continue;
+        const captured = fig.dataset.captured === "" ? null : Number(fig.dataset.captured);
+        const age = captured == null ? null : now - captured;
+        el.textContent = captured == null ? "" : `captured ${ago(age)}`;
+        el.className = "age " + ageClass(age);
+      }
+      const updated = $("updated");
+      if (paused) { updated.textContent = "Paused"; updated.classList.remove("late"); }
+      else if (lastOk) {
+        const since = Date.now() / 1000 - lastOk;
+        updated.textContent = lastError ? `Update failed (${lastError}); last good ${ago(since)}` : `Updated ${ago(since)}`;
+        updated.classList.toggle("late", Boolean(lastError) || since > POLL_MS / 1000 * 3);
+      }
+    }
+
+    function nowShot(display) {
+      const screens = display.screens || {};
+      if (display.current_screen && screens[display.current_screen]) return screens[display.current_screen];
+      let best = null;
+      for (const shot of Object.values(screens)) {
+        if (shot.captured_at != null && (!best || shot.captured_at > best.captured_at)) best = shot;
+      }
+      return best;
+    }
+
+    function render() {
+      if (!data) return;
+      document.documentElement.style.setProperty("--tile-h", tileH + "px");
+      const displays = data.displays || [];
+      const live = displays.filter((d) => !d.error);
+      const notes = [];
+      for (const d of displays) if (d.error) notes.push(`<li class="warn">${esc(d.label)}: ${esc(d.error)}</li>`);
+      for (const d of displays) if (d.note) notes.push(`<li>${esc(d.label)}: ${esc(d.note)}</li>`);
+      for (const s of data.skipped || []) notes.push(`<li class="muted">Not shown: ${esc(s.label)} (${esc(s.state || "unknown")})</li>`);
+      if (!displays.length) notes.push('<li class="muted">No display is online. Tick "Include offline displays" to try the rest.</li>');
+      $("notes").innerHTML = notes.join("");
+
+      const used = new Set();
+      const nowRow = $("now");
+      const nowFigs = [];
+      for (const d of displays) {
+        const shot = nowShot(d);
+        const fig = figure("now|" + d.client_id);
+        fillFigure(fig, d, shot, `${d.label}${shot ? " · " + shot.screen : ""}`, Boolean(shot && shot.screen === d.current_screen));
+        nowFigs.push(fig); used.add("now|" + d.client_id);
+      }
+      nowRow.replaceChildren(...nowFigs);
+
+      const groups = $("groups");
+      const blocks = [];
+      const jump = [];
+      if (groupBy === "screen") {
+        for (const screen of data.screen_order || []) {
+          const id = anchor("screen", screen);
+          const missing = live.filter((d) => !(d.screens || {})[screen]).map((d) => d.label);
+          const section = document.createElement("section");
+          section.className = "group-block"; section.id = id;
+          section.innerHTML = `<h2>${esc(screen)}${missing.length ? `<span class="muted">no screenshot from ${esc(missing.join(", "))}</span>` : ""}</h2><div class="tiles"></div>`;
+          const tiles = [];
+          for (const d of live) {
+            const shot = (d.screens || {})[screen];
+            if (!shot) continue;
+            const key = `${screen}|${d.client_id}`;
+            const fig = figure(key);
+            fillFigure(fig, d, shot, d.label, screen === d.current_screen);
+            tiles.push(fig); used.add(key);
+          }
+          section.querySelector(".tiles").replaceChildren(...tiles);
+          blocks.push(section);
+          jump.push(`<a href="#${id}">${esc(screen)}</a>`);
+        }
+      } else {
+        for (const d of live) {
+          const id = anchor("display", d.client_id);
+          const section = document.createElement("section");
+          section.className = "group-block"; section.id = id;
+          const detail = [d.display_profile, d.dimensions].filter(Boolean).join(" · ");
+          section.innerHTML = `<h2>${esc(d.label)}<span class="muted">${esc(detail)}</span></h2><div class="tiles"></div>`;
+          const tiles = [];
+          for (const screen of d.screen_order || []) {
+            const shot = d.screens[screen];
+            const key = `${screen}|${d.client_id}`;
+            const fig = figure(key);
+            fillFigure(fig, d, shot, screen, screen === d.current_screen);
+            tiles.push(fig); used.add(key);
+          }
+          section.querySelector(".tiles").replaceChildren(...tiles);
+          blocks.push(section);
+          jump.push(`<a href="#${id}">${esc(d.label)}</a>`);
+        }
+      }
+      if (!blocks.length) {
+        const p = document.createElement("p");
+        p.className = "muted"; p.textContent = "No screenshots yet.";
+        blocks.push(p);
+      }
+      groups.replaceChildren(...blocks);
+      $("jump").innerHTML = jump.join("");
+      for (const key of [...figures.keys()]) if (!used.has(key)) figures.delete(key);
+      tickAges();
+    }
+
+    async function poll() {
+      clearTimeout(timer);
+      if (paused) return;
+      try {
+        const response = await fetch("/api/live" + (includeAll ? "?all=1" : ""), {cache: "no-store", credentials: "same-origin"});
+        if (response.status === 401) { location.href = "/login?next=/live"; return; }
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        data = await response.json();
+        skew = data.now - Date.now() / 1000;
+        lastOk = Date.now() / 1000; lastError = null;
+        render();
+      } catch (error) {
+        lastError = error.message || String(error);
+        tickAges();
+      }
+      if (!paused && !document.hidden) timer = setTimeout(poll, POLL_MS);
+    }
+
+    function press(selector, attr, value) {
+      document.querySelectorAll(selector).forEach((b) => b.setAttribute("aria-pressed", String(b.dataset[attr] === String(value))));
+    }
+    document.querySelectorAll("[data-group]").forEach((b) => b.addEventListener("click", () => {
+      groupBy = b.dataset.group; store.set("live.groupBy", groupBy); press("[data-group]", "group", groupBy); render();
+    }));
+    document.querySelectorAll("[data-size]").forEach((b) => b.addEventListener("click", () => {
+      tileH = Number(b.dataset.size); store.set("live.tileH", String(tileH)); press("[data-size]", "size", tileH); render();
+    }));
+    $("include-all").checked = includeAll;
+    $("include-all").addEventListener("change", (e) => {
+      includeAll = e.target.checked; store.set("live.includeAll", includeAll ? "1" : "0"); poll();
+    });
+    $("pause").addEventListener("click", (e) => {
+      paused = !paused; e.target.setAttribute("aria-pressed", String(paused));
+      e.target.textContent = paused ? "Resume" : "Pause";
+      if (paused) clearTimeout(timer); else poll();
+      tickAges();
+    });
+    document.addEventListener("visibilitychange", () => { if (!document.hidden && !paused) poll(); });
+    press("[data-group]", "group", groupBy);
+    press("[data-size]", "size", tileH);
+    setInterval(tickAges, 1000);
+    poll();
+  })();
+  </script>
+</body>
+</html>
