@@ -129,6 +129,14 @@ SECTIONS: tuple[Section, ...] = (
     Section("news", "News, stocks, and On This Day"),
     Section("adsb", "ADS-B receiver stats"),
     Section(
+        "remote_temps",
+        "Remote temperature monitor",
+        note=(
+            "The pi remote temp screen reads the aggregate /temps endpoint "
+            "that the MMM-RemoteTempMonitor MagicMirror module serves on the LAN."
+        ),
+    ),
+    Section(
         "maps",
         "Maps and travel",
         note=(
@@ -395,6 +403,11 @@ SETTINGS: tuple[Setting, ...] = (
        "Receiver site latitude for distances; defaults to WEATHER_LATITUDE."),
     _s("ADSB_HOME_LONGITUDE", "longitude", _SERVER, "adsb",
        "Receiver site longitude; defaults to WEATHER_LONGITUDE."),
+    _s("REMOTE_TEMP_MONITOR_HOST", "str", _SERVER, "remote_temps",
+       "Host or IP of the MagicMirror running MMM-RemoteTempMonitor; the screen reads "
+       "http://HOST:PORT/temps.", default="192.168.1.201", provider=True),
+    _s("REMOTE_TEMP_MONITOR_PORT", "int", _SERVER, "remote_temps",
+       "The module's aggregatePort.", default="9877", minimum=1, maximum=65535),
     _s("TRAFFIC_OUTBOUND_DISPLAYS", "str", _SERVER_ONLY, "maps",
        "Comma-separated display IDs whose traffic screen shows the outbound "
        "(evening) segments; every other display shows inbound. A name also matches "

@@ -82,6 +82,7 @@ class ServerFeedService:
         seed: bool = True,
         download_ncaa_fbs_logos: Callable[[list[dict]], Any] | None = None,
         fetch_traffic: Callable[..., Any] | None = None,
+        fetch_remote_temps: Callable[..., Any] | None = None,
     ) -> None:
         if data is None:
             from services.data_coordinator import coordinator as data
@@ -101,6 +102,9 @@ class ServerFeedService:
         if fetch_traffic is None:
             from services.traffic import fetch_report as fetch_traffic
         self.fetch_traffic = fetch_traffic
+        if fetch_remote_temps is None:
+            from services.remote_temps import fetch_snapshot as fetch_remote_temps
+        self.fetch_remote_temps = fetch_remote_temps
         self.standings_fetchers = dict(standings_fetchers or _default_standings_fetchers())
         self.settings = settings
         self.history_path = history_path
@@ -330,6 +334,10 @@ class ServerFeedService:
             # Raises on a failed or malformed report, so the last good
             # report stays published and the screen shows its age.
             self.data.publish("traffic", self.fetch_traffic(force=True))
+        elif feed == "remote_temps":
+            # Raises when the MagicMirror host is unreachable, so the last
+            # good temperatures stay published and the screen says cached.
+            self.data.publish("remote_temps", self.fetch_remote_temps(force=True))
         else:  # pragma: no cover - every catalogued feed is handled above
             raise KeyError(f"no server refresher for feed {feed!r}")
 

@@ -44,6 +44,7 @@ RAW_SCREEN_IDS = [
     "news headlines",
     "news headlines 2",
     "traffic",
+    "pi remote temp",
     "weather logo",
     "weather1",
     "weather2",

@@ -36,6 +36,7 @@
       "weather radar": 1,
       "traffic": 0,
       "inside": 1,
+      "pi remote temp": 0,
       "bears logo": 3,
       "bears stand1": 0,
       "bears stand2": 0,
@@ -258,6 +259,9 @@
         "steps": [
           {
             "screen": "inside"
+          },
+          {
+            "screen": "pi remote temp"
           }
         ]
       },
@@ -948,6 +952,9 @@
         "background": "#000000"
       },
       "traffic": {
+        "background": "#000000"
+      },
+      "pi remote temp": {
         "background": "#000000"
       }
     }

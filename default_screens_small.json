@@ -14,6 +14,7 @@
       "weather radar": 1,
       "astronomical": 2,
       "inside": 1,
+      "pi remote temp": 0,
       "news headlines": {
         "frequency": 1,
         "alt": {
@@ -214,6 +215,9 @@
         "steps": [
           {
             "screen": "inside"
+          },
+          {
+            "screen": "pi remote temp"
           }
         ]
       },
@@ -902,6 +906,9 @@
         "background": "#000000"
       },
       "traffic": {
+        "background": "#000000"
+      },
+      "pi remote temp": {
         "background": "#000000"
       }
     }

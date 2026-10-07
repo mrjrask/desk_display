@@ -1,0 +1,13 @@
+{
+  "type": "temperature_snapshot",
+  "count": 6,
+  "updatedAt": "2026-10-07T18:00:00.000Z",
+  "devices": [
+    {"deviceId": "192.168.1.42:square", "device_id": "192.168.1.42:square", "id": "192.168.1.42:square", "hostname": "square", "name": "square", "celsius": 61.3, "temp_c": 61.3, "temperature_c": 61.3, "fahrenheit": 142.3, "temp_f": 142.3, "temperature_f": 142.3, "pi_model": "5", "pi_ram": "8GB", "platform": null, "cpu_arch": null, "temperature": {"celsius": 61.3, "fahrenheit": 142.3}, "lastSeen": 1791396000000, "ip": "192.168.1.42"},
+    {"deviceId": "192.168.1.43:hyper", "hostname": "hyper", "name": "hyper", "celsius": 48.7, "fahrenheit": 119.7, "pi_model": "4", "pi_ram": "4GB", "temperature": {"celsius": 48.7, "fahrenheit": 119.7}, "lastSeen": 1791396000000, "ip": "192.168.1.43"},
+    {"deviceId": "192.168.1.201:magicmirror", "hostname": "magicmirror", "name": "magicmirror", "celsius": 72.4, "fahrenheit": 162.3, "pi_model": "4", "pi_ram": "2GB", "temperature": {"celsius": 72.4, "fahrenheit": 162.3}, "lastSeen": 1791396000000, "ip": "192.168.1.201"},
+    {"deviceId": "192.168.1.50:adsb", "hostname": "adsb", "name": "adsb", "celsius": 86.1, "fahrenheit": 187.0, "pi_model": "3B+", "pi_ram": "1GB", "temperature": {"celsius": 86.1, "fahrenheit": 187.0}, "lastSeen": 1791396000000, "ip": "192.168.1.50"},
+    {"deviceId": "192.168.1.51:pihole", "hostname": "pihole", "name": "pihole", "celsius": 42.0, "fahrenheit": 107.6, "pi_model": "Zero 2 W", "pi_ram": null, "temperature": {"celsius": 42.0, "fahrenheit": 107.6}, "lastSeen": 1791396000000, "ip": "192.168.1.51"},
+    {"deviceId": "192.168.1.60:office-mac", "hostname": "office-mac", "name": "office-mac", "celsius": 55.0, "fahrenheit": 131.0, "pi_model": null, "pi_ram": null, "platform": "darwin", "temperature": {"celsius": 55.0, "fahrenheit": 131.0}, "lastSeen": 1791396000000, "ip": "192.168.1.60"}
+  ]
+}

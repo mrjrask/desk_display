@@ -16,6 +16,7 @@
     "astronomical": 0,
     "weather quad": 0,
     "inside": 1,
+    "pi remote temp": 0,
     "verano logo": 0,
     "vrnof": 3,
     "hawks logo": 0,
@@ -181,6 +182,9 @@
       "steps": [
         {
           "screen": "inside"
+        },
+        {
+          "screen": "pi remote temp"
         }
       ]
     },

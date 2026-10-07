@@ -290,6 +290,9 @@
     },
     "traffic": {
       "background": "#000000"
+    },
+    "pi remote temp": {
+      "background": "#000000"
     }
   }
 }

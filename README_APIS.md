@@ -13,6 +13,7 @@ In a server/client deployment only the render server calls these providers, so e
 - [Diagnostics](#diagnostics)
 - [Weather and radar](#weather-and-radar) (including AirNow air quality)
 - [Chicago traffic (Travel Midwest)](#chicago-traffic-travel-midwest)
+- [Remote temperatures (MMM-RemoteTempMonitor)](#remote-temperatures-mmm-remotetempmonitor)
 - [Sports](#sports)
 - [News headlines (RSS/Atom)](#news-headlines-rssatom)
 - [Finance](#finance)
@@ -155,6 +156,20 @@ Weather radar/map rendering may also use:
 | Segments | Matched by exact `description`. Inbound (every display except hyper): Edens Lake Cook to I-290/Jane Byrne (via Kennedy), Edens Lake Cook to Montrose, Kennedy Montrose to I-290/Jane Byrne, Kennedy Reversibles Montrose to Ohio. Outbound (hyper, `TRAFFIC_OUTBOUND_DISPLAYS`): the four opposite segments. |
 
 A reversible segment that is closed in its direction reports a travel time of zero or less (for example `-16`); it is shown as N/A and keeps its row. A speed of 0 means no reading, so only the travel time is shown. `over` drives the heavy (red) state. Travel Midwest's per-segment detail data (average time, congestion level) is not fetched in this release; the screen's elevated (amber) state is used only when a congestion level is present.
+
+---
+
+## Remote temperatures (MMM-RemoteTempMonitor)
+
+| Item | Value |
+| --- | --- |
+| Role | CPU temperatures for the `pi remote temp` screen. |
+| Endpoint | `http://REMOTE_TEMP_MONITOR_HOST:REMOTE_TEMP_MONITOR_PORT/temps`, default `http://192.168.1.201:9877/temps`: the aggregate rebroadcast endpoint the [MMM-RemoteTempMonitor](https://github.com/mrjrask/MMM-RemoteTempMonitor) MagicMirror module serves on its `aggregatePort`. Not the broadcaster's own port 9876, which only reports that one device. |
+| Credential | None (LAN only). |
+| Refresh | Every minute. The render server fetches it once as the `remote_temps` feed for every display; a standalone display shares one 1-minute cache. A failed or malformed refresh keeps the last good snapshot, and after 3 minutes the screen says it is cached and how old it is. |
+| Shape | `{"type": "temperature_snapshot", "count", "updatedAt", "devices": [device, ...]}`; each device has `hostname`, `celsius`, `fahrenheit`, `pi_model`, `pi_ram`, `ip` and `lastSeen` (plus aliases such as `temp_c` and `temperature.celsius`, which are read when the main fields are missing). |
+
+The module drops a device it has not heard from for 30 seconds, so the screen shows the devices the MagicMirror shows. Rows are sorted hottest first and coloured with the module's default thresholds: green below 60 °C, yellow-green from 60, orange from 70, red from 80 and purple from 85.
 
 ---
 
@@ -398,6 +413,7 @@ variables](README.md#ads-b-receiver-variables) for configuration.
 | AHL/Wolves | Optional `AHL_*` overrides; defaults are provided for the Chicago Wolves helper path. |
 | Wi-Fi probes | Optional `WIFI_TCP_PROBE_*`, `WIFI_HTTPS_PROBE_URL`, and `RPI_CONNECT_CONTROL_HOST` values. |
 | ADS-B receivers | `ADSB_DEVICE_1_HOST` (and optionally `ADSB_DEVICE_2_HOST`); no API key needed. |
+| Remote temperatures | None. Optional `REMOTE_TEMP_MONITOR_HOST` / `REMOTE_TEMP_MONITOR_PORT` (default `192.168.1.201` / `9877`). |
 | Traffic | None. Optional `TRAFFIC_OUTBOUND_DISPLAYS` (server, default `hyper`) or `TRAFFIC_DIRECTION` (standalone). |
 
 ---
