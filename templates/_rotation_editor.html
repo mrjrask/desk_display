@@ -349,6 +349,12 @@
     font-size: 0.92rem;
     overflow-wrap: anywhere;
   }
+  .rotation-editor .row .screen-note {
+    margin-top: 2px;
+    font-size: 0.75rem;
+    font-weight: 400;
+    opacity: 0.75;
+  }
   .rotation-editor .row > div {
     min-width: 0;
   }
@@ -984,6 +990,14 @@
 
       const idCell = makeElement("div", "screen-cell");
       idCell.appendChild(makeElement("div", "screen-id", screen.id));
+      if (screen.id === "traffic") {
+        // Forced by schedule.py; not editable here.
+        idCell.appendChild(makeElement(
+          "div",
+          "screen-note",
+          "Always plays every cycle, +2 s, 5:30–11:00 am and 3:30–7:00 pm (Central), whatever the settings here."
+        ));
+      }
       row.appendChild(idCell);
 
       const playlistCell = makeCell("Playlist");

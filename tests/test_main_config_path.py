@@ -29,7 +29,7 @@ def test_load_scheduler_uses_active_config_path(main_module, monkeypatch):
     monkeypatch.setattr(main_module, "load_schedule_config", fake_load_schedule_config)
     monkeypatch.setattr(main_module, "sanitize_schedule_config", lambda config: (config, []))
     scheduler = SimpleNamespace(node_count=1, requested_ids={"date"}, start_at=lambda ids: False)
-    monkeypatch.setattr(main_module, "build_scheduler", lambda config: scheduler)
+    monkeypatch.setattr(main_module, "build_scheduler", lambda config, **_: scheduler)
 
     loaded = main_module._load_scheduler_from_config()
 
@@ -79,7 +79,7 @@ def test_sanitized_config_is_written_back_atomically(tmp_path, main_module, monk
         lambda config: ({"screens": {"date": 1}}, ["legacy"]),
     )
     scheduler = SimpleNamespace(node_count=1, requested_ids={"date"}, start_at=lambda ids: False)
-    monkeypatch.setattr(main_module, "build_scheduler", lambda config: scheduler)
+    monkeypatch.setattr(main_module, "build_scheduler", lambda config, **_: scheduler)
 
     calls = []
     real_atomic_write = main_module._atomic_write_json
@@ -115,7 +115,7 @@ def test_sanitized_write_back_skipped_on_concurrent_edit(tmp_path, main_module, 
         lambda config: ({"screens": {"date": 1}}, ["legacy"]),
     )
     scheduler = SimpleNamespace(node_count=1, requested_ids={"date"}, start_at=lambda ids: False)
-    monkeypatch.setattr(main_module, "build_scheduler", lambda config: scheduler)
+    monkeypatch.setattr(main_module, "build_scheduler", lambda config, **_: scheduler)
 
     real_load = main_module.load_schedule_config
 

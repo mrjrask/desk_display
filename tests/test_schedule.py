@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 import time
 from datetime import UTC, datetime
 
@@ -818,3 +819,69 @@ def test_start_at_skips_starter_screens_without_a_slot():
     assert scheduler.start_at(["nixie", "weather1"])
     assert scheduler.preview_scheduled_ids(1) == ["weather1"]
     assert not build_scheduler(config).start_at([])
+
+
+# ── Rush hour: traffic is forced in during commute hours ────────────────────
+
+
+def _central(hour, minute=0):
+    from datetime import datetime
+
+    from display_time import CENTRAL_TIME
+
+    return datetime(2026, 10, 7, hour, minute, tzinfo=CENTRAL_TIME)
+
+
+@pytest.mark.parametrize("hour,minute,expected", [
+    (5, 29, False), (5, 30, True), (10, 59, True), (11, 0, False),
+    (15, 29, False), (15, 30, True), (18, 59, True), (19, 0, False), (2, 0, False),
+])
+def test_in_rush_hour_windows(hour, minute, expected):
+    import schedule as schedule_module
+
+    assert schedule_module.in_rush_hour(_central(hour, minute)) is expected
+
+
+def _rush_scheduler(config):
+    import schedule as schedule_module
+
+    return schedule_module.build_scheduler(config, rush_hour=True)
+
+
+def test_traffic_is_forced_every_cycle_with_extra_seconds_in_rush_hour(monkeypatch):
+    import schedule as schedule_module
+
+    scheduler = _rush_scheduler({"screens": {"date": 1, "weather1": 3, "traffic": 0}})
+    registry = {sid: SimpleNamespace(id=sid, available=True) for sid in ("date", "weather1", "traffic")}
+    monkeypatch.setattr(schedule_module, "in_rush_hour", lambda now=None: True)
+    assert scheduler.extra_seconds_for("traffic") == 2
+    played = [scheduler.next_available(registry).id for _ in range(7)]  # cycles 1, 2 and 3
+    assert played.count("traffic") == 3 and played.count("date") == 3 and played.count("weather1") == 1
+
+
+def test_traffic_stays_off_outside_rush_hour(monkeypatch):
+    import schedule as schedule_module
+
+    scheduler = _rush_scheduler({"screens": {"date": 1, "weather1": 1, "traffic": 0}})
+    registry = {sid: SimpleNamespace(id=sid, available=True) for sid in ("date", "weather1", "traffic")}
+    monkeypatch.setattr(schedule_module, "in_rush_hour", lambda now=None: False)
+    assert scheduler.extra_seconds_for("traffic") == 0
+    assert {scheduler.next_available(registry).id for _ in range(4)} == {"date", "weather1"}
+
+
+def test_configured_traffic_keeps_its_own_settings_outside_rush_hour(monkeypatch):
+    import schedule as schedule_module
+
+    scheduler = _rush_scheduler({"screens": {"date": 1, "traffic": {"frequency": 2, "extra_seconds": 5}}})
+    monkeypatch.setattr(schedule_module, "in_rush_hour", lambda now=None: False)
+    assert scheduler.extra_seconds_for("traffic") == 5
+    monkeypatch.setattr(schedule_module, "in_rush_hour", lambda now=None: True)
+    assert scheduler.extra_seconds_for("traffic") == 5  # never shortened
+
+
+def test_rush_hour_is_opt_in():
+    import schedule as schedule_module
+
+    plain = schedule_module.build_scheduler({"screens": {"date": 1, "traffic": 0}})
+    assert "traffic" not in plain.entry_ids
+    assert "traffic" in _rush_scheduler({"screens": {"date": 1, "traffic": 0}}).entry_ids

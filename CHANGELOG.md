@@ -9,6 +9,11 @@ clients, or both on one machine, alongside the unchanged standalone install.
 See the README's [deployment modes](README.md#deployment-modes) and
 [OPERATIONS.md](OPERATIONS.md) for installing, upgrading and rolling back.
 
+- The **traffic** screen is forced into every rotation (frequency 1, plus 2
+  extra seconds) from 5:30 to 11:00 am and 3:30 to 7:00 pm Central, whatever its
+  configured frequency. It is not editable in the UI; the screen's row on the
+  Config and Playlists pages carries a note. Outside those hours it follows its
+  usual settings (off by default).
 - New **Live** page on the server's config UI (`/live`): every online
   display's latest screenshot of each screen, grouped by screen or by
   display, at each display's own shape, with capture ages, refreshed every

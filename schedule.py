@@ -15,7 +15,7 @@ import contextlib
 import json
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, time as clock_time
 from typing import TYPE_CHECKING, Any, Literal, Optional
 
 from display_time import CENTRAL_TIME
@@ -23,6 +23,22 @@ from screens_catalog import SCREEN_IDS, canonical_screen_id
 
 if TYPE_CHECKING:
     from screens.registry import ScreenDefinition
+
+
+# Commute hours: the traffic screen is forced into every rotation (frequency 1
+# plus a couple of extra seconds), whatever its configured frequency, between
+# these local (Central) times.  Not editable in the UI; the screen's config
+# line says so.
+RUSH_HOUR_SCREEN = "traffic"
+RUSH_HOUR_WINDOWS = ((clock_time(5, 30), clock_time(11, 0)), (clock_time(15, 30), clock_time(19, 0)))
+RUSH_HOUR_EXTRA_SECONDS = 2
+
+
+def in_rush_hour(now_utc: Optional[datetime] = None) -> bool:
+    """Whether *now_utc* (default now) is inside one of :data:`RUSH_HOUR_WINDOWS`."""
+
+    local = (now_utc or datetime.now(UTC)).astimezone(CENTRAL_TIME).time()
+    return any(start <= local < end for start, end in RUSH_HOUR_WINDOWS)
 
 
 KNOWN_SCREENS: set[str] = set(SCREEN_IDS)
@@ -58,6 +74,16 @@ class _ScheduleEntry:
     extra_seconds: int = 0
     hide_after: Optional[datetime] = None
     alternate: Optional[_AlternateSchedule] = None
+    # Forced into the rotation at frequency 1 during rush hour (see RUSH_HOUR_*).
+    rush: bool = False
+
+
+def _frequency_at(entry: _ScheduleEntry, now_utc: datetime) -> int:
+    """The frequency *entry* plays at *now_utc*: 1 during rush hour for a rush entry."""
+
+    if entry.rush and in_rush_hour(now_utc):
+        return 1
+    return entry.frequency
 
 
 @dataclass(frozen=True)
@@ -126,7 +152,10 @@ class ScreenScheduler:
         return set(self._requested)
 
     def extra_seconds_for(self, screen_id: str) -> int:
-        return max(0, int(self._extra_seconds_by_id.get(screen_id, 0)))
+        extra = max(0, int(self._extra_seconds_by_id.get(screen_id, 0)))
+        if any(e.rush and e.screen_id == screen_id for e in self._entries) and in_rush_hour():
+            extra = max(extra, RUSH_HOUR_EXTRA_SECONDS)
+        return extra
 
     def alt_screen_ids_for(self, screen_id: str) -> tuple[str, ...]:
         """Return alternate screen ids configured on *screen_id*'s entry.
@@ -177,6 +206,7 @@ class ScreenScheduler:
                     extra_seconds=entry.extra_seconds,
                     hide_after=entry.hide_after,
                     alternate=cloned_alt,
+                    rush=entry.rush,
                 )
             )
 
@@ -255,12 +285,13 @@ class ScreenScheduler:
         self._pending_indices = []
 
         for index, entry in enumerate(self._entries):
-            if entry.frequency == 0:
+            frequency = _frequency_at(entry, now_utc)
+            if frequency == 0:
                 continue
             if entry.hide_after is not None and now_utc >= entry.hide_after:
                 continue
 
-            if (self._cycle_number - 1) % entry.frequency == 0:
+            if (self._cycle_number - 1) % frequency == 0:
                 self._pending_indices.append(index)
 
         self._cursor = 0
@@ -274,9 +305,9 @@ class ScreenScheduler:
             return True
 
         active_frequencies = [
-            entry.frequency
+            _frequency_at(entry, now_utc)
             for entry in self._entries
-            if entry.frequency > 0 and (entry.hide_after is None or now_utc < entry.hide_after)
+            if _frequency_at(entry, now_utc) > 0 and (entry.hide_after is None or now_utc < entry.hide_after)
         ]
         if not active_frequencies:
             return False
@@ -597,13 +628,16 @@ def starter_screen_ids(config: Any) -> list[str]:
     return []
 
 
-def build_scheduler(config: dict[str, Any]) -> ScreenScheduler:
+def build_scheduler(config: dict[str, Any], *, rush_hour: bool = False) -> ScreenScheduler:
     """Build a scheduler at cycle 1 in saved playlist/config-page order.
 
     Frequency values are interpreted directly: zero removes the independent
     base slot, while positive ``N`` means cycles ``1``, ``1 + N``, ``1 + 2N``,
     and so on. A zero-frequency screen ID remains
     valid as an alternate referenced by another enabled entry.
+
+    ``rush_hour`` forces the traffic screen in during commute hours
+    (:data:`RUSH_HOUR_WINDOWS`); the displays that play the rotation ask for it.
     """
 
     if not isinstance(config, dict):
@@ -801,5 +835,13 @@ def build_scheduler(config: dict[str, Any]) -> ScreenScheduler:
 
     if not entries:
         raise ValueError("Configuration must contain at least one enabled screen")
+
+    if rush_hour:
+        # Traffic is forced during rush hour even when it is switched off.
+        rush_entry = next((e for e in entries if e.screen_id == RUSH_HOUR_SCREEN), None)
+        if rush_entry is not None:
+            rush_entry.rush = True
+        elif RUSH_HOUR_SCREEN in KNOWN_SCREENS:
+            entries.append(_ScheduleEntry(RUSH_HOUR_SCREEN, 0, rush=True))
 
     return ScreenScheduler(entries)
