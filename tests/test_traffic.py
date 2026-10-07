@@ -331,3 +331,13 @@ def test_compose_screen_gives_the_render_its_scopes_direction(monkeypatch, scope
     server_rendering.compose_screen(key, PROFILE_PRESETS[DISPLAY_PROFILE_DISPLAY_HAT_MINI], snapshot,
                                     SimpleNamespace(for_size=lambda w, h: {}))
     assert captured["direction"] == direction
+
+
+def test_a_downtown_located_display_shows_outbound_whatever_its_id():
+    hyper_site = SimpleNamespace(latitude=41.9037, longitude=-87.6357)
+    home = SimpleNamespace(latitude=42.1373, longitude=-87.8446)
+    assert traffic.direction_for_display("den", {}, hyper_site) == "outbound"
+    assert traffic.direction_for_display("den", {}, home) == "inbound"
+    assert traffic.direction_for_display("den", {}, None) == "inbound"
+    assert traffic.screen_scopes("den", ["traffic"], env={}, location=hyper_site) == {
+        "traffic": traffic.OUTBOUND_SCOPE}
