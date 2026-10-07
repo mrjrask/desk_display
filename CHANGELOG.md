@@ -9,6 +9,16 @@ clients, or both on one machine, alongside the unchanged standalone install.
 See the README's [deployment modes](README.md#deployment-modes) and
 [OPERATIONS.md](OPERATIONS.md) for installing, upgrading and rolling back.
 
+- New **Live** page on the server's config UI (`/live`): every online
+  display's latest screenshot of each screen, grouped by screen or by
+  display, at each display's own shape, with capture ages, refreshed every
+  5 seconds without reloading. It shows what
+  `scripts/collect_client_screenshots.py` collects, kept current: the server
+  fetches each display's screenshot list from its config UI (reused for
+  4 seconds, and a display that does not answer is retried after 20),
+  proxies the images, cached by capture time, reads its own panel directly,
+  and falls back to the screenshots a display on another network uploads.
+  Linked from every page's navigation on servers.
 - New **pi remote temp** screen: the CPU temperatures of the LAN's
   Raspberry Pis, drawn like the MMM-RemoteTempMonitor MagicMirror module
   (its uppercase header, the Device / °C / °F table, hottest first, names

@@ -393,6 +393,9 @@ def register(
             rows.append(row)
         return rows
 
+    # The Live page lists the same displays.
+    app.extensions["desk_display_client_rows"] = client_rows
+
     def _latest_commands(client_id: str) -> list[dict[str, Any]]:
         latest: dict[str, dict[str, Any]] = {}
         for command in _commands().for_client(client_id):
