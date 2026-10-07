@@ -1,6 +1,6 @@
 """CPU temperatures of the LAN's Raspberry Pis from MMM-RemoteTempMonitor.
 
-The ``remote temp monitor`` screen shows the same table as the
+The ``pi remote temp`` screen shows the same table as the
 MMM-RemoteTempMonitor MagicMirror module
 (https://github.com/mrjrask/MMM-RemoteTempMonitor).  That module's node
 helper collects every device's UDP broadcasts and republishes them as one
@@ -29,7 +29,7 @@ import time
 from collections.abc import Mapping
 from typing import Any, Optional
 
-SCREEN_ID = "remote temp monitor"
+SCREEN_ID = "pi remote temp"
 FEED = "remote_temps"
 DEFAULT_HOST = "192.168.1.201"
 DEFAULT_PORT = 9877

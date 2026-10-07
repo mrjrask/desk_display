@@ -48,7 +48,7 @@ class LegacyStandaloneRuntime:
             self.data.read_postseason("nba_playoffs")
         elif screen_id == "traffic":
             self.data.read_traffic()
-        elif screen_id == "remote temp monitor":
+        elif screen_id == "pi remote temp":
             self.data.read_remote_temps()
 
     def step(self):

@@ -235,7 +235,7 @@ TRAFFIC_DEPENDENCIES: dict[str, set[str]] = {"traffic": {"traffic"}}
 TRAFFIC_REFRESH_INTERVALS: dict[str, int] = {"traffic": 300}
 # MMM-RemoteTempMonitor's aggregate snapshot of the LAN's Pi CPU temperatures
 # (services.remote_temps), read on the LAN every minute.
-REMOTE_TEMPS_DEPENDENCIES: dict[str, set[str]] = {"remote_temps": {"remote temp monitor"}}
+REMOTE_TEMPS_DEPENDENCIES: dict[str, set[str]] = {"remote_temps": {"pi remote temp"}}
 REMOTE_TEMPS_REFRESH_INTERVALS: dict[str, int] = {"remote_temps": 60}
 SERVER_FEED_DEPENDENCIES: dict[str, set[str]] = {
     **FEED_DEPENDENCIES, **LEAGUE_STANDINGS_DEPENDENCIES, **TRAFFIC_DEPENDENCIES,

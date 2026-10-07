@@ -1,4 +1,4 @@
-"""Tests for the remote temp monitor screen: MMM-RemoteTempMonitor parsing, caching and drawing."""
+"""Tests for the pi remote temp screen: MMM-RemoteTempMonitor parsing, caching and drawing."""
 from __future__ import annotations
 
 import json
@@ -154,7 +154,7 @@ def test_an_unreachable_magicmirror_keeps_the_last_good_snapshot():
 
 
 def test_the_server_fetches_temperatures_once_a_minute_for_all_displays():
-    assert feeds.feeds_for_screen("remote temp monitor", feeds.SERVER_FEED_DEPENDENCIES) == {"remote_temps"}
+    assert feeds.feeds_for_screen("pi remote temp", feeds.SERVER_FEED_DEPENDENCIES) == {"remote_temps"}
     assert feeds.SERVER_FEED_REFRESH_INTERVALS["remote_temps"] == 60
     clock, results = _Clock(), [payload(), OSError("offline")]
 
@@ -170,11 +170,11 @@ def test_the_server_fetches_temperatures_once_a_minute_for_all_displays():
         standings_fetchers={}, history_path="/nonexistent/aq.json", clock=clock, wall_clock=clock,
         fetch_traffic=lambda **k: None, fetch_remote_temps=fetch,
     )
-    assert service.refresh({"remote temp monitor"}) == {"remote_temps": True}
+    assert service.refresh({"pi remote temp"}) == {"remote_temps": True}
     good = service.data.snapshot().values["remote_temps"]
-    assert service.refresh({"remote temp monitor"}) == {}
+    assert service.refresh({"pi remote temp"}) == {}
     clock.now += 60
-    assert service.refresh({"remote temp monitor"}) == {"remote_temps": False}
+    assert service.refresh({"pi remote temp"}) == {"remote_temps": False}
     assert service.data.snapshot().values["remote_temps"] == good
 
 
@@ -218,7 +218,7 @@ def test_server_renders_from_the_snapshot_without_fetching(monkeypatch):
     data = payload()
     snapshot = DataCoordinator().publish("remote_temps", data)
     artifact = ScreenRenderer().render(
-        "remote temp monitor", PROFILE_PRESETS[DISPLAY_PROFILE_HYPERPIXEL4], ServerPreferenceSnapshot(revision=1),
+        "pi remote temp", PROFILE_PRESETS[DISPLAY_PROFILE_HYPERPIXEL4], ServerPreferenceSnapshot(revision=1),
         snapshot,
     )
     assert artifact.image.size == (800, 480)

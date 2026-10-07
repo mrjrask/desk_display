@@ -1064,7 +1064,7 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
     # server hands the screen its ``remote_temps`` feed.
     remote_temps_payload = None if context.allow_upstream_requests else context.cache.get("remote_temps")
     register(
-        "remote temp monitor",
+        "pi remote temp",
         lambda: draw_remote_temps(context.display, remote_temps_payload, transition=True),
     )
     register(

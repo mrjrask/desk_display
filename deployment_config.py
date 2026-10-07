@@ -132,7 +132,7 @@ SECTIONS: tuple[Section, ...] = (
         "remote_temps",
         "Remote temperature monitor",
         note=(
-            "The remote temp monitor screen reads the aggregate /temps endpoint "
+            "The pi remote temp screen reads the aggregate /temps endpoint "
             "that the MMM-RemoteTempMonitor MagicMirror module serves on the LAN."
         ),
     ),

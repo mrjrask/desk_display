@@ -291,7 +291,7 @@
     "traffic": {
       "background": "#000000"
     },
-    "remote temp monitor": {
+    "pi remote temp": {
       "background": "#000000"
     }
   }

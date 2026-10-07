@@ -163,7 +163,7 @@ A reversible segment that is closed in its direction reports a travel time of ze
 
 | Item | Value |
 | --- | --- |
-| Role | CPU temperatures for the `remote temp monitor` screen. |
+| Role | CPU temperatures for the `pi remote temp` screen. |
 | Endpoint | `http://REMOTE_TEMP_MONITOR_HOST:REMOTE_TEMP_MONITOR_PORT/temps`, default `http://192.168.1.201:9877/temps`: the aggregate rebroadcast endpoint the [MMM-RemoteTempMonitor](https://github.com/mrjrask/MMM-RemoteTempMonitor) MagicMirror module serves on its `aggregatePort`. Not the broadcaster's own port 9876, which only reports that one device. |
 | Credential | None (LAN only). |
 | Refresh | Every minute. The render server fetches it once as the `remote_temps` feed for every display; a standalone display shares one 1-minute cache. A failed or malformed refresh keeps the last good snapshot, and after 3 minutes the screen says it is cached and how old it is. |

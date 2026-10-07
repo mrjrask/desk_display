@@ -9,7 +9,7 @@ clients, or both on one machine, alongside the unchanged standalone install.
 See the README's [deployment modes](README.md#deployment-modes) and
 [OPERATIONS.md](OPERATIONS.md) for installing, upgrading and rolling back.
 
-- New **remote temp monitor** screen: the CPU temperatures of the LAN's
+- New **pi remote temp** screen: the CPU temperatures of the LAN's
   Raspberry Pis, drawn like the MMM-RemoteTempMonitor MagicMirror module
   (its uppercase header, the Device / °C / °F table, hottest first, names
   with Pi model and RAM, temperatures in the module's green → yellow-green →

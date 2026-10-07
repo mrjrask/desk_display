@@ -1,4 +1,4 @@
-"""Draw the LAN's Raspberry Pi CPU temperatures (the ``remote temp monitor`` screen).
+"""Draw the LAN's Raspberry Pi CPU temperatures (the ``pi remote temp`` screen).
 
 The screen copies the MMM-RemoteTempMonitor MagicMirror module's look: black
 background, an uppercase MagicMirror module header with its grey underline,
@@ -27,7 +27,7 @@ import config
 from services import remote_temps
 from utils import ScreenImage, log_call
 
-TITLE = "Remote Temp Monitor"
+TITLE = "Pi Remote Temp"
 # MagicMirror's palette (main.css) and the module's stylesheet.
 BACKGROUND = (0, 0, 0)
 TEXT = (153, 153, 153)  # --color-text #999
@@ -99,7 +99,7 @@ def freshness_text(report: dict[str, Any]) -> str:
 
 def compose_remote_temps_image(payload: Any, *, width: Optional[int] = None, height: Optional[int] = None,
                                now: Optional[float] = None) -> Image.Image:
-    """The remote temp monitor screen from a ``remote_temps`` feed payload."""
+    """The pi remote temp screen from a ``remote_temps`` feed payload."""
 
     width = int(width or config.WIDTH)
     height = int(height or config.HEIGHT)
@@ -231,7 +231,7 @@ def compose_remote_temps_image(payload: Any, *, width: Optional[int] = None, hei
 
 @log_call
 def draw_remote_temps(display, payload: Any = None, transition: bool = False) -> ScreenImage:
-    """Draw the remote temp monitor screen.
+    """Draw the pi remote temp screen.
 
     *payload* is the ``remote_temps`` feed value; ``None`` (standalone) reads
     the shared one-minute cache, which falls back to the last good snapshot.

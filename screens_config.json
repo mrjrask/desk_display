@@ -16,7 +16,7 @@
     "astronomical": 0,
     "weather quad": 0,
     "inside": 1,
-    "remote temp monitor": 0,
+    "pi remote temp": 0,
     "verano logo": 0,
     "vrnof": 3,
     "hawks logo": 0,
@@ -184,7 +184,7 @@
           "screen": "inside"
         },
         {
-          "screen": "remote temp monitor"
+          "screen": "pi remote temp"
         }
       ]
     },
