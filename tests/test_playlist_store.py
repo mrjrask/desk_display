@@ -190,7 +190,8 @@ def test_assignment_is_single_per_client_and_shareable(store):
     assert store.assignment_for("office") is None
     lookup = store.assignment_for("den")
     assert lookup.playlist_id == a["id"] and lookup.playlist_revision == a["revision"]
-    assert lookup.screens == ("date", "inside", "weather1") and lookup.alternates == ("weather2",)
+    # Traffic is always sent: commute hours force it into every rotation.
+    assert lookup.screens == ("date", "inside", "traffic", "weather1") and lookup.alternates == ("weather2",)
 
 
 def test_guarded_delete(store):

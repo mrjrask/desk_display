@@ -54,6 +54,7 @@ from typing import Any
 from deployment_config import scrub_secrets
 from remote_display.locations import Location, LocationError
 from remote_display.models import ModelValidationError, identifier, screen_id
+from schedule import RUSH_HOUR_SCREEN
 from screens_catalog import canonical_screen_id
 
 try:  # pragma: no cover - fcntl is unavailable on Windows
@@ -460,6 +461,11 @@ class PlaylistStore:
         if playlist is None:
             return None
         required, alternates = document_screens(playlist["document"])
+        # Commute hours force traffic into every rotation (schedule.py), so
+        # every client is sent its picture whatever the playlist lists.
+        if RUSH_HOUR_SCREEN not in required:
+            required = tuple(sorted({*required, RUSH_HOUR_SCREEN}))
+            alternates = tuple(a for a in alternates if a != RUSH_HOUR_SCREEN)
         return StoredAssignment(client_id, playlist["id"], playlist["revision"], required, alternates)
 
     # ── Playlist changes ───────────────────────────────────────────────────

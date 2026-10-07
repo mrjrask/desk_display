@@ -778,7 +778,7 @@ def _load_scheduler_from_config() -> Optional[ScreenScheduler]:
                 logging.warning("Could not persist cleaned schedule configuration: %s", exc)
 
     try:
-        scheduler = build_scheduler(config_data)
+        scheduler = build_scheduler(config_data, rush_hour=True)
     except ValueError as exc:
         logging.error(f"Invalid schedule configuration: {exc}")
         return None

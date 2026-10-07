@@ -346,7 +346,7 @@ class DisplayClient:
             return
         document = playlist.to_dict()["document"]
         try:
-            scheduler = build_scheduler(document)
+            scheduler = build_scheduler(document, rush_hour=True)
         except ValueError as exc:
             LOGGER.error("Cached playlist cannot be scheduled: %s", exc)
             return
