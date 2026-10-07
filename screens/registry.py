@@ -280,6 +280,7 @@ render_nba_playoffs = _lazy_callable("screens.nba_playoffs.render_nba_playoffs")
 render_mlb_playoffs = _lazy_callable("screens.mlb_playoffs.render_mlb_playoffs")
 draw_air_quality_screen = _lazy_callable("screens.draw_air_quality.draw_air_quality_screen")
 draw_traffic = _lazy_callable("screens.draw_traffic.draw_traffic")
+draw_remote_temps = _lazy_callable("screens.draw_remote_temps.draw_remote_temps")
 draw_adsb_stats_screen = _lazy_callable("screens.draw_adsb_stats.draw_adsb_stats_screen")
 draw_inside = _lazy_callable("screens.draw_inside.draw_inside")
 is_inside_sensor_available = _lazy_callable("screens.draw_inside.is_inside_sensor_available")
@@ -1058,6 +1059,13 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
             context.cache.get("traffic_direction"),
             transition=True,
         ),
+    )
+    # Standalone reads the shared one-minute cache while drawing; the render
+    # server hands the screen its ``remote_temps`` feed.
+    remote_temps_payload = None if context.allow_upstream_requests else context.cache.get("remote_temps")
+    register(
+        "remote temp monitor",
+        lambda: draw_remote_temps(context.display, remote_temps_payload, transition=True),
     )
     register(
         "inside",

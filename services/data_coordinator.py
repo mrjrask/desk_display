@@ -247,6 +247,16 @@ class DataCoordinator:
             self.publish("traffic", value)
         return value
 
+    def read_remote_temps(self) -> Any:
+        """Publish the remote temperatures from their shared cache (the last good ones if a refresh fails)."""
+
+        from services import remote_temps
+
+        value = remote_temps.get_snapshot()
+        if value is not None:
+            self.publish("remote_temps", value)
+        return value
+
     def read_postseason(self, feed: str, *, ttl_seconds: int = 120, force: bool = False) -> dict[str, Any]:
         """Acquire a league's playoff bracket (``feeds.POSTSEASON_FEED_MODULES``)."""
 

@@ -568,6 +568,8 @@ installs only, never clients.
 | `ADSB_TYPE_DB_URL` | server, standalone | restart | provider |
 | `ADSB_TYPE_DB_PATH` | server, standalone | restart |  |
 | `ADSB_TYPE_DB_REFRESH_DAYS` | server, standalone | restart |  |
+| `REMOTE_TEMP_MONITOR_HOST` | server, standalone | restart | provider |
+| `REMOTE_TEMP_MONITOR_PORT` | server, standalone | restart |  |
 | `TRAFFIC_OUTBOUND_DISPLAYS` | server | restart |  |
 | `TRAFFIC_DIRECTION` | standalone | restart |  |
 | `SCREENS_CONFIG_PATH` | server, standalone | restart (file contents hot-reload) |  |

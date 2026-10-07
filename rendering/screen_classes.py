@@ -169,6 +169,7 @@ _TABLE: dict[str, tuple[str, str]] = {
     "adsb stats": (STATIC, ""),
     "adsb live": (PERIODIC, "aircraft overhead now"),
     "traffic": (PERIODIC, "traffic report; its age line stays current"),
+    "remote temp monitor": (PERIODIC, "CPU temperatures refresh every minute"),
 }
 for _team in ("cubs", "sox"):
     _TABLE.update({

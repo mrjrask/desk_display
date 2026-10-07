@@ -816,6 +816,7 @@ normal loading instead of silently dropping renamed screens.
 - `on this day`
 - `news headlines`
 - `news headlines 2`
+- `remote temp monitor` (CPU temperatures of the LAN's Pis from the MMM-RemoteTempMonitor MagicMirror module, drawn like the module; off by default)
 - `traffic` (Edens and Kennedy travel times from Travel Midwest: inbound on every display except hyper, which shows outbound; off by default)
 - `weather logo`
 - `weather1`

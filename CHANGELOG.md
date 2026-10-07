@@ -9,6 +9,16 @@ clients, or both on one machine, alongside the unchanged standalone install.
 See the README's [deployment modes](README.md#deployment-modes) and
 [OPERATIONS.md](OPERATIONS.md) for installing, upgrading and rolling back.
 
+- New **remote temp monitor** screen: the CPU temperatures of the LAN's
+  Raspberry Pis, drawn like the MMM-RemoteTempMonitor MagicMirror module
+  (its uppercase header, the Device / °C / °F table, hottest first, names
+  with Pi model and RAM, temperatures in the module's green → yellow-green →
+  orange → red → purple scale with its glow). The render server reads the
+  module's aggregate endpoint, `http://REMOTE_TEMP_MONITOR_HOST:REMOTE_TEMP_MONITOR_PORT/temps`
+  (default `192.168.1.201:9877`), every minute as the `remote_temps` feed; an
+  unreachable MagicMirror keeps the last good temperatures and the screen says
+  they are cached. Laid out for every display profile, including 1080p. Off
+  (frequency 0) in the default configs, in the sensors playlist after inside.
 - The MagicMirror² module (MMM-desk_display) now animates every moving
   screen: weather radar and the league overviews loop their frames, news
   tickers scroll, and quads step their tiles, as on a desk_display client.

@@ -290,6 +290,9 @@
     },
     "traffic": {
       "background": "#000000"
+    },
+    "remote temp monitor": {
+      "background": "#000000"
     }
   }
 }
