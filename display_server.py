@@ -321,8 +321,9 @@ def create_app(
 
     def client_screen_scopes(client_id: str, screens: Iterable[str]) -> Mapping[str, str]:
         screens = list(screens)
-        # Hyper's traffic screen shows the outbound segments (services/traffic.py).
-        return {**screen_scopes(location_of(client_id), screens), **road_traffic.screen_scopes(client_id, screens)}
+        # Hyper's (or a downtown-located display's) traffic screen shows the outbound segments.
+        location = location_of(client_id)
+        return {**screen_scopes(location, screens), **road_traffic.screen_scopes(client_id, screens, location=location)}
 
     if assignments is None and config.playlist_store_path is not None:
         store = PlaylistStore(config.playlist_store_path)

@@ -411,7 +411,8 @@ SETTINGS: tuple[Setting, ...] = (
     _s("TRAFFIC_OUTBOUND_DISPLAYS", "str", _SERVER_ONLY, "maps",
        "Comma-separated display IDs whose traffic screen shows the outbound "
        "(evening) segments; every other display shows inbound. A name also matches "
-       "IDs that start with it and a dash (hyper matches hyper-panel).",
+       "IDs that start with it and a dash (hyper matches hyper-panel). A display whose "
+       "own location (Clients page) is within 15 km of downtown Chicago also shows outbound.",
        default="hyper"),
     _s("TRAFFIC_DIRECTION", "choice", _STANDALONE_ONLY, "maps",
        "Which segments a standalone display's traffic screen shows. auto picks "

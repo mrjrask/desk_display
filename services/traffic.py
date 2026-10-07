@@ -18,6 +18,7 @@ no network requests.
 from __future__ import annotations
 
 import logging
+import math
 import os
 import socket
 import threading
@@ -90,6 +91,9 @@ DIRECTION_KEYS: Mapping[str, tuple[str, ...]] = {
     OUTBOUND: ("kennedy_reversible_outbound", "kennedy_jane_byrne_montrose",
                "edens_jane_byrne_lakecook", "edens_montrose_lakecook"),
 }
+# A display located this close to downtown Chicago shows outbound, whatever its ID.
+DOWNTOWN = (41.8781, -87.6298)
+DOWNTOWN_RADIUS_KM = 15.0
 ROAD_ROUTES = {"Edens": "I-94", "Kennedy": "I-90/94"}
 # Detail data's congestion levels (optional; the Quick Traffic report has none).
 _ELEVATED_CONGESTION = {"light", "medium", "moderate"}
@@ -255,10 +259,28 @@ def outbound_displays(env: Optional[Mapping[str, str]] = None) -> tuple[str, ...
     return tuple(part.strip().lower() for part in raw.split(",") if part.strip())
 
 
-def direction_for_display(client_id: str, env: Optional[Mapping[str, str]] = None) -> str:
-    """Outbound for hyper (``hyper`` or ``hyper-…``), inbound for every other display."""
+def near_downtown(latitude: Optional[float], longitude: Optional[float]) -> bool:
+    """Whether a display location is within :data:`DOWNTOWN_RADIUS_KM` of downtown Chicago."""
 
-    return OUTBOUND if _named(client_id, outbound_displays(env)) else INBOUND
+    if latitude is None or longitude is None:
+        return False
+    lat1, lon1, lat2, lon2 = map(math.radians, (latitude, longitude, *DOWNTOWN))
+    a = math.sin((lat2 - lat1) / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin((lon2 - lon1) / 2) ** 2
+    return 6371.0 * 2 * math.asin(math.sqrt(a)) <= DOWNTOWN_RADIUS_KM
+
+
+def direction_for_display(client_id: str, env: Optional[Mapping[str, str]] = None, location: Any = None) -> str:
+    """Outbound for hyper (``hyper`` or ``hyper-…``) or a display located downtown, else inbound.
+
+    *location* is the display's own latitude/longitude (the one its weather
+    and astronomy screens use), anything with those two attributes.
+    """
+
+    if _named(client_id, outbound_displays(env)):
+        return OUTBOUND
+    if near_downtown(getattr(location, "latitude", None), getattr(location, "longitude", None)):
+        return OUTBOUND
+    return INBOUND
 
 
 def direction_for_scope(scope: Optional[str]) -> str:
@@ -267,10 +289,11 @@ def direction_for_scope(scope: Optional[str]) -> str:
     return OUTBOUND if scope == OUTBOUND_SCOPE else INBOUND
 
 
-def screen_scopes(client_id: str, screens, env: Optional[Mapping[str, str]] = None) -> dict[str, str]:
+def screen_scopes(client_id: str, screens, env: Optional[Mapping[str, str]] = None,
+                  location: Any = None) -> dict[str, str]:
     """``{"traffic": OUTBOUND_SCOPE}`` for an outbound display that plays the screen."""
 
-    if SCREEN_ID in set(screens) and direction_for_display(client_id, env) == OUTBOUND:
+    if SCREEN_ID in set(screens) and direction_for_display(client_id, env, location) == OUTBOUND:
         return {SCREEN_ID: OUTBOUND_SCOPE}
     return {}
 
