@@ -8,7 +8,7 @@
   <style>
     .clients-toolbar { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; }
     .clients-toolbar h2 { margin: 0; }
-    .client-list { display: grid; gap: 0.75rem; }
+    .client-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.75rem; }
     .client-card {
       border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 12px; padding: 0.75rem 0.9rem;
       background: rgba(30, 41, 59, 0.45);
@@ -36,7 +36,18 @@
     .panel-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0.8rem 1.5rem; }
     .panel-grid .group + .group { margin-top: 0; }
     .client-panel button { font-size: 0.82rem; padding: 0.3rem 0.65rem; }
+    .client-card { min-width: 0; }
+    .panel-grid { grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); }
+    @media (max-width: 600px) {
+      .client-head { flex-direction: column; align-items: stretch; }
+      .client-head .spacer { display: none; }
+      .client-playlist { width: 100%; }
+      .client-playlist select { flex: 1; min-width: 0; }
+      .client-tabs button, .client-panel button { min-height: 40px; }
+      .clients-toolbar #add-display { width: 100%; }
+    }
   </style>
+  {% include "_mobile_style.html" %}
 </head>
 <body>
   <h1>Display Clients</h1>

@@ -9,6 +9,12 @@ clients, or both on one machine, alongside the unchanged standalone install.
 See the README's [deployment modes](README.md#deployment-modes) and
 [OPERATIONS.md](OPERATIONS.md) for installing, upgrading and rolling back.
 
+- The config UI pages are now **mobile friendly**: on phones, a vertical iPad or
+  a narrow browser window the nav wraps, controls stack, buttons and fields are
+  touch sized (16px fields, so iOS no longer zooms on focus), long commands wrap
+  and nothing scrolls sideways except the Live tiles and wide Stats tables.
+  Shared rules live in `templates/_mobile_style.html`; wide layouts are
+  unchanged. Before/after shots are in `previews/mobile-friendly/`.
 - The **traffic** screen is forced into every rotation (frequency 1, plus 2
   extra seconds) from 5:30 to 11:00 am and 3:30 to 7:00 pm Central, whatever its
   configured frequency. It is not editable in the UI; the screen's row on the

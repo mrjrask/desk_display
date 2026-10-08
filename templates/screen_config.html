@@ -204,6 +204,14 @@
     .global-scroll-controls .hint { color: #94a3b8; font-size: 0.8rem; flex: 1 1 320px; }
     .config-path { color: #64748b; font-size: 0.75rem; margin: 0.8rem 0 0; }
   </style>
+  {% include "_mobile_style.html" %}
+  <style>
+    @media (max-width: 600px) {
+      .file-actions-menu { position: fixed; left: 0.75rem; right: 0.75rem; top: auto; min-width: 0; max-height: 70vh; overflow-y: auto; }
+      .toolbar .spacer { display: none; }
+      .global-scroll-controls input { width: 5rem; }
+    }
+  </style>
 </head>
 <body>
   <h1>Screen Rotation Configuration</h1>

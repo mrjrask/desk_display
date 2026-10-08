@@ -17,6 +17,10 @@
     .library-grid .list-item { border-color: rgba(148, 163, 184, 0.2); }
     .editor-head { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; padding-top: 0.2rem; }
     .editor-head #edit-name { font-weight: 700; font-size: 1.05rem; min-width: 14rem; }
+    @media (max-width: 600px) {
+      .library-head input[type="text"], .library-head #new-name { width: 100%; }
+      .editor-head #edit-name { min-width: 0; flex: 1 1 100%; }
+    }
     .editor-meta { margin: 0.4rem 0 0; font-size: 0.8rem; }
     #dirty-state.dirty { color: #fde68a; }
     .editor-note { font-size: 0.82rem; margin: 0.6rem 0; }
@@ -24,6 +28,7 @@
     .below-editor details { padding: 0.55rem 0.75rem; border-radius: 10px; border: 1px solid rgba(148, 163, 184, 0.18); }
     #editor a { color: #7dd3fc; }
   </style>
+  {% include "_mobile_style.html" %}
 </head>
 <body>
   <h1>Client Playlists</h1>

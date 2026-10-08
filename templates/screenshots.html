@@ -88,6 +88,7 @@
     }
     .controls {
       margin-top: 1rem;
+      flex-wrap: wrap;
       display: flex;
       justify-content: flex-end;
       gap: 0.75rem;
@@ -285,6 +286,15 @@
       width: 100%;
       display: block;
       line-height: 0;
+    }
+  </style>
+  {% include "_mobile_style.html" %}
+  <style>
+    @media (max-width: 600px) {
+      .controls { justify-content: center; }
+      .overlay { padding: 0.5rem; }
+      .grid { gap: 0.9rem; grid-template-columns: minmax(0, 1fr); }
+      .card { padding: 0.8rem; }
     }
   </style>
 </head>

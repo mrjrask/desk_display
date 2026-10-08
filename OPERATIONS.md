@@ -891,6 +891,16 @@ lists them (up to `DESK_DISPLAY_RENDER_WORKERS` per profile in use, so renders f
 profile run side by side). A worker that dies is started again on
 the next render; restarting `desk_display_server.service` restarts them all.
 
+### Using the web pages on a phone or tablet
+
+Every config UI page (Rotation Config, Playlists, Clients, Add a display, Screenshots, Live, Stats and the
+login page) adapts to narrow screens: below about 900px the rotation rows stack their controls, below 600px the
+navigation wraps into compact touch-sized buttons, the toolbar stops sticking to the top, and the Clients cards
+put the playlist picker and tabs on their own lines. The Live tiles and the wide Stats tables scroll sideways
+inside their own box; the page itself never does. Wide layouts, including a landscape iPad, are unchanged.
+The shared rules are in `templates/_mobile_style.html`, and `tests/test_mobile_layout.py` fails if a page
+overflows at 320, 390 or 820px wide.
+
 ### Logs and caches
 
 | Where | What |

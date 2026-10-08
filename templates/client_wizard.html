@@ -20,7 +20,7 @@
     .badge.ok { border-color: #22c55e; color: #bbf7d0; }
     .fix { margin-top: 0.4rem; }
     pre.code {
-      margin: 0.35rem 0; padding: 0.6rem 0.7rem; border-radius: 10px; overflow-x: auto; white-space: pre;
+      margin: 0.35rem 0; padding: 0.6rem 0.7rem; border-radius: 10px; overflow-x: auto; white-space: pre-wrap; overflow-wrap: anywhere;
       background: rgba(2, 6, 23, 0.8); border: 1px solid rgba(148, 163, 184, 0.25);
       font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8rem;
     }
@@ -39,7 +39,16 @@
     ol.howto li { margin-bottom: 0.7rem; }
     details summary { cursor: pointer; color: #94a3b8; margin: 0.4rem 0; }
     .wizard a { color: #38bdf8; }
+    .check > * { min-width: 0; }
+    .wizard, .wizard p, .wizard .hint { overflow-wrap: anywhere; }
+    @media (max-width: 600px) {
+      .steps li { flex: 1 1 45%; }
+      .check { grid-template-columns: 1fr; gap: 0.3rem; }
+      .check .badge { justify-self: start; }
+      .actions button { flex: 1 1 100%; }
+    }
   </style>
+  {% include "_mobile_style.html" %}
 </head>
 <body>
   <h1>Add a display</h1>
