@@ -8,11 +8,30 @@
   <style>
     .clients-toolbar { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; }
     .clients-toolbar h2 { margin: 0; }
-    .client-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.75rem; }
+    .client-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(26rem, 100%), 1fr)); gap: 0.9rem; align-items: start; }
     .client-card {
-      border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 12px; padding: 0.75rem 0.9rem;
-      background: rgba(30, 41, 59, 0.45);
+      border: 1px solid rgba(148, 163, 184, 0.2); border-left: 4px solid rgba(148, 163, 184, 0.5);
+      border-radius: 12px; padding: 0.75rem 0.9rem; background: rgba(30, 41, 59, 0.45);
     }
+    .client-card.s-ok { border-left-color: #22c55e; }
+    .client-card.s-warn { border-left-color: #f59e0b; }
+    .client-card.s-bad { border-left-color: #ef4444; }
+    .stat-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); gap: 0.6rem; margin-top: 0.8rem; }
+    .stat-tile { border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 10px; padding: 0.5rem 0.75rem; background: rgba(30, 41, 59, 0.45); }
+    .stat-tile .num { font-size: 1.6rem; font-weight: 700; line-height: 1.1; }
+    .stat-tile .lbl { font-size: 0.78rem; color: #94a3b8; }
+    .stat-tile.ok .num { color: #86efac; }
+    .stat-tile.warn .num { color: #fde68a; }
+    .stat-tile.bad .num { color: #fecaca; }
+    .client-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr)); gap: 0.4rem; margin-top: 0.7rem; }
+    .client-actions button, .client-actions a.btn {
+      font-size: 0.82rem; padding: 0.4rem 0.5rem; text-align: center; min-height: 36px;
+      border: 1px solid rgba(148, 163, 184, 0.4); border-radius: 8px; color: inherit; text-decoration: none;
+      background: rgba(15, 23, 42, 0.6); box-sizing: border-box; display: flex; align-items: center; justify-content: center;
+    }
+    .client-actions button:hover:not(:disabled), .client-actions a.btn:hover { border-color: #38bdf8; }
+    .client-actions button.busy { border-color: #f59e0b; }
+    .client-job { margin-top: 0.4rem; font-size: 0.8rem; }
     .client-head { display: flex; gap: 0.6rem 1rem; align-items: center; flex-wrap: wrap; }
     .client-title { display: flex; gap: 0.5rem; align-items: baseline; flex-wrap: wrap; min-width: 0; }
     .client-title .name { font-weight: 700; font-size: 1.02rem; }
@@ -45,6 +64,8 @@
       .client-playlist select { flex: 1; min-width: 0; }
       .client-tabs button, .client-panel button { min-height: 40px; }
       .clients-toolbar #add-display { width: 100%; }
+      .client-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .client-actions button, .client-actions a.btn { min-height: 44px; }
     }
   </style>
   {% include "_mobile_style.html" %}
@@ -63,6 +84,8 @@
   </nav>
 
   <div id="notice" class="panel notice hidden" role="status"></div>
+
+  <div id="stat-tiles" class="stat-tiles" aria-label="Fleet summary"></div>
 
   <div class="panel">
     <div class="clients-toolbar">
@@ -446,15 +469,7 @@ function deliveryPanel(body, client) {
 function maintenancePanel(body, client) {
   const grid = element(body, "div", "panel-grid");
   const software = group(grid, "Software");
-  const buttons = element(software, "div", "row");
-  const busy = new Set((client.commands || []).filter((c) => UNFINISHED.has(c.state)).map((c) => c.action));
-  const reachable = !["never_connected", "unknown", "revoked", "disabled"].includes(client.state);
-  for (const [action, label, help] of reachable ? MAINTENANCE_BUTTONS : []) {
-    const el = button(buttons, label, () => clientCommand(client, action), help);
-    el.dataset.command = action;
-    el.disabled = busy.has(action);
-  }
-  if (!reachable) line(software, "Maintenance buttons appear once the display is connected.", "muted small");
+  line(software, "The Update, Upgrade, Restart, Reset Screenshots and Clear caches buttons are on the display's card.", "muted small");
   for (const command of client.commands || []) commandLine(software, command);
 
   const access = group(grid, "Name and credential");
@@ -495,6 +510,58 @@ async function removeClient(client) {
   load();
 }
 
+function cardTone(client) {
+  if (client.state === "online" && !client.warnings.some((w) => w.severity === "error")) {
+    return client.warnings.length || String(client.revision_state).startsWith("pending") ? "s-warn" : "s-ok";
+  }
+  return ["stale", "never_connected"].includes(client.state) ? "s-warn" : "s-bad";
+}
+
+function renderTiles(clients) {
+  const box = document.getElementById("stat-tiles");
+  box.innerHTML = "";
+  const tones = clients.map(cardTone);
+  const tiles = [
+    ["Displays", clients.length, ""],
+    ["Online", clients.filter((c) => c.state === "online").length, "ok"],
+    ["Need attention", tones.filter((t) => t !== "s-ok").length, tones.some((t) => t === "s-bad") ? "bad" : "warn"],
+    ["Jobs running", clients.reduce((n, c) => n + (c.commands || []).filter((x) => UNFINISHED.has(x.state)).length, 0), ""],
+  ];
+  for (const [label, value, tone] of tiles) {
+    const tile = element(box, "div", "stat-tile" + (tone && value ? " " + tone : ""));
+    element(tile, "div", "num", String(value));
+    element(tile, "div", "lbl", label);
+  }
+}
+
+// The common actions sit on the card face; settings, delivery detail and credentials stay in the tabs.
+function actionBar(card, client) {
+  const reachable = !["never_connected", "unknown", "revoked", "disabled"].includes(client.state);
+  const commands = client.commands || [];
+  const busy = new Set(commands.filter((c) => UNFINISHED.has(c.state)).map((c) => c.action));
+  const bar = element(card, "div", "client-actions");
+  if (reachable) {
+    for (const [action, label, help] of MAINTENANCE_BUTTONS) {
+      const el = button(bar, busy.has(action) ? `${label.replace(" (git pull)", "")} …` : label.replace(" (git pull)", ""),
+        () => clientCommand(client, action), help);
+      el.dataset.command = action;
+      el.disabled = busy.has(action);
+      el.classList.toggle("busy", busy.has(action));
+    }
+  }
+  for (const [href, label] of [["/live", "Live view"], ["/screenshots", "Screenshots"]]) {
+    const link = element(bar, "a", "btn", label);
+    link.href = href;
+  }
+  const latest = commands[0];
+  if (!reachable) {
+    line(card, "Maintenance buttons appear once the display is connected.", "muted small client-job");
+  } else if (latest) {
+    const div = line(card, ` ${latest.label}: ${COMMAND_STATES[latest.state] || latest.state}`, "muted client-job");
+    div.dataset.commandState = latest.state;
+  }
+}
+
 function render(data) {
   playlists = data.playlists;
   globalVerticalAdjustment = Number(data.global_vertical_speed_adjustment || 0);
@@ -504,6 +571,7 @@ function render(data) {
   const online = data.clients.filter((client) => client.state === "online").length;
   document.getElementById("client-count").textContent = data.clients.length
     ? `${data.clients.length} display${data.clients.length === 1 ? "" : "s"} · ${online} online` : "";
+  renderTiles(data.clients);
   if (!data.clients.length) {
     line(list, "No clients yet. Use Add a display to set one up.", "muted");
     return;
@@ -511,6 +579,7 @@ function render(data) {
   for (const client of data.clients) {
     const card = element(list, "article", "client-card");
     card.dataset.clientId = client.client_id;
+    card.classList.add(cardTone(client));
 
     const head = element(card, "div", "client-head");
     const title = element(head, "div", "client-title");
@@ -562,6 +631,8 @@ function render(data) {
         div.prepend(tag);
       }
     }
+
+    actionBar(card, client);
 
     const tabs = element(card, "div", "client-tabs");
     for (const [name, label] of PANELS) {
