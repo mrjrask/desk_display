@@ -519,9 +519,9 @@ installs only, never clients.
 | `AIR_QUALITY_LATITUDE` | server, standalone | restart |  |
 | `AIR_QUALITY_LONGITUDE` | server, standalone | restart |  |
 | `AIR_QUALITY_ENABLE_POLLEN` | server, standalone | restart |  |
+| `NBA_SHOW_FROM` | server, standalone | restart |  |
 | `NCAAM_SCOREBOARD_MODE` | server, standalone | restart |  |
 | `NHL_BREAK_WINDOWS_JSON` | server, standalone | restart |  |
-| `NBA_SHOW_FROM` | server, standalone | restart | Hide NBA and Bulls screens before this date (`YYYY-MM-DD`, default `2026-10-19`). |
 | `NHL_SCHEDULE_ICS_URL` | server, standalone | restart | provider |
 | `WORLD_CUP_PREGAME_SCORE_DISPLAY` | server, standalone | restart |  |
 | `TEAM_STANDINGS_DISPLAY_SECONDS` | server, standalone | restart |  |

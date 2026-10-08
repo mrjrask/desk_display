@@ -322,6 +322,8 @@ SETTINGS: tuple[Setting, ...] = (
        "Include pollen data where the provider supplies it.", default="1"),
 
     # ── Sports and teams ─────────────────────────────────────────────────────
+    _s("NBA_SHOW_FROM", "str", _SERVER, "sports",
+       "Date (YYYY-MM-DD) before which NBA and Bulls screens are hidden.", default="2026-10-19"),
     _s("NCAAM_SCOREBOARD_MODE", "str", _SERVER, "sports",
        "NCAAM scoreboard mode.", default="top25"),
     _s("NHL_BREAK_WINDOWS_JSON", "json", _SERVER, "sports",
