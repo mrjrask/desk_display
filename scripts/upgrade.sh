@@ -45,19 +45,29 @@ client_was_active=0
 if systemctl is-active --quiet "$CLIENT_SERVICE" 2>/dev/null; then
   client_was_active=1
 fi
+# Set by the re-exec after the pull: the client state from before the upgrade.
+client_was_active=${DESK_DISPLAY_UPGRADE_CLIENT_WAS_ACTIVE:-$client_was_active}
 
 modes() { "$PYTHON_BIN" "$PROJECT_DIR/install_modes.py" "$@" --project-dir "$PROJECT_DIR" --systemd-dir "$SYSTEMD_UNIT_DIR"; }
 
 mode=$(modes detect)
 log "Upgrading the $mode install in $PROJECT_DIR"
 
-snapshot=$(modes snapshot --mode "$mode")
+snapshot=""
+# The re-exec after the pull must not snapshot again (that would capture the new code).
+[[ -n "${DESK_DISPLAY_UPGRADE_REEXEC:-}" ]] || snapshot=$(modes snapshot --mode "$mode")
 if [[ -n "$snapshot" ]]; then
   log "Snapshot of server state: $snapshot"
 fi
 
 if [[ $pull -eq 1 ]]; then
   git -C "$PROJECT_DIR" pull --ff-only
+  # bash reads this file as it runs, and the pull may just have replaced it;
+  # carry on in a fresh copy of the new script rather than in a stale offset.
+  if [[ -z "${DESK_DISPLAY_UPGRADE_REEXEC:-}" ]]; then
+    export DESK_DISPLAY_UPGRADE_REEXEC=1 DESK_DISPLAY_UPGRADE_CLIENT_WAS_ACTIVE=$client_was_active
+    exec bash "$SCRIPT_DIR/upgrade.sh" --no-pull
+  fi
 fi
 
 requirements=$(modes requirements --mode "$mode")
@@ -122,5 +132,22 @@ if [[ $has_client -eq 1 ]]; then
     fi
     log "Leaving $CLIENT_SERVICE stopped. Start it later with: sudo systemctl start $CLIENT_SERVICE"
   fi
+fi
+
+# Every project service should now be running; name any that is not, instead
+# of leaving the operator to guess which one to restart (or to reboot).
+not_running=()
+while IFS= read -r svc; do
+  [[ -n "$svc" ]] || continue
+  [[ "$svc" == "$CLIENT_SERVICE" && $has_client -eq 1 && $client_was_active -eq 0 ]] && continue
+  state=$(systemctl is-enabled "$svc" 2>/dev/null || true)
+  [[ "$state" == "enabled" ]] || continue
+  systemctl is-active --quiet "$svc" 2>/dev/null || not_running+=("$svc")
+done < <(modes services --mode "$mode")
+if [[ ${#not_running[@]} -gt 0 ]]; then
+  warn "Not running after the upgrade: ${not_running[*]}. See: journalctl -u <service> -n 80"
+fi
+if [[ -e /var/run/reboot-required ]]; then
+  warn "The system says a reboot is required (updated system packages); reboot when convenient."
 fi
 log "Upgrade complete ($mode)."

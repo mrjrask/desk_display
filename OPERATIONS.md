@@ -1135,6 +1135,8 @@ git pull --ff-only
 # then, on a client or combined install, asks about the client
 ```
 
+After the restart the upgrade lists any enabled service that is not running, and says so when the system wants a reboot (`/var/run/reboot-required`). A reboot is not otherwise needed. After the pull it continues in a fresh copy of itself, so a changed `upgrade.sh` takes effect in the same run.
+
 On a client or combined install the upgrade ends by asking
 `desk_display_client.service was running before the upgrade. Start it now? [Y/n]`
 (or `was not running ... [y/N]`). Yes starts it fresh; no leaves it stopped,
