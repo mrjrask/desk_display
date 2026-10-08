@@ -83,13 +83,13 @@ SEGMENTS: tuple[Segment, ...] = (
 )
 SEGMENTS_BY_KEY = {segment.key: segment for segment in SEGMENTS}
 SEGMENTS_BY_DESCRIPTION = {segment.description: segment for segment in SEGMENTS}
-# Rows each direction shows, in screen order: inbound is Edens then Kennedy,
-# outbound is Kennedy then Edens (reversible lane first within each road).
+# Rows each direction shows, in screen order: both directions are Edens then
+# Kennedy (reversible lane first within each road).
 DIRECTION_KEYS: Mapping[str, tuple[str, ...]] = {
-    INBOUND: ("edens_lakecook_montrose", "edens_lakecook_jane_byrne",
+    INBOUND: ("edens_lakecook_jane_byrne", "edens_lakecook_montrose",
               "kennedy_reversible_inbound", "kennedy_montrose_jane_byrne"),
-    OUTBOUND: ("kennedy_reversible_outbound", "kennedy_jane_byrne_montrose",
-               "edens_jane_byrne_lakecook", "edens_montrose_lakecook"),
+    OUTBOUND: ("edens_jane_byrne_lakecook", "edens_montrose_lakecook",
+               "kennedy_reversible_outbound", "kennedy_jane_byrne_montrose"),
 }
 # A display located this close to downtown Chicago shows outbound, whatever its ID.
 DOWNTOWN = (41.8781, -87.6298)

@@ -15,10 +15,10 @@ from services.server_feeds import ServerFeedService
 
 FIXTURE = Path(__file__).parent / "fixtures" / "travel_midwest_quick_traffic.json"
 NOW = 1_000_000.0
-INBOUND_KEYS = ["edens_lakecook_montrose", "edens_lakecook_jane_byrne",
+INBOUND_KEYS = ["edens_lakecook_jane_byrne", "edens_lakecook_montrose",
                 "kennedy_reversible_inbound", "kennedy_montrose_jane_byrne"]
-OUTBOUND_KEYS = ["kennedy_reversible_outbound", "kennedy_jane_byrne_montrose",
-                 "edens_jane_byrne_lakecook", "edens_montrose_lakecook"]
+OUTBOUND_KEYS = ["edens_jane_byrne_lakecook", "edens_montrose_lakecook",
+                 "kennedy_reversible_outbound", "kennedy_jane_byrne_montrose"]
 
 
 def raw_report():
@@ -79,7 +79,7 @@ def test_a_missing_segment_is_kept_as_not_available():
     assert data["missing"] == ["edens_lakecook_montrose"]
     report = traffic.select(data, traffic.INBOUND, now=NOW)
     assert keys(report) == INBOUND_KEYS
-    assert report["groups"][0]["rows"][0]["status"] == traffic.UNAVAILABLE
+    assert report["groups"][0]["rows"][1]["status"] == traffic.UNAVAILABLE
 
 
 @pytest.mark.parametrize("raw", [
@@ -101,7 +101,7 @@ def test_inbound_and_outbound_select_their_four_segments_grouped_by_road():
     assert keys(inbound) == INBOUND_KEYS
     assert keys(outbound) == OUTBOUND_KEYS
     assert [group["road"] for group in inbound["groups"]] == ["Edens", "Kennedy"]
-    assert [group["road"] for group in outbound["groups"]] == ["Kennedy", "Edens"]
+    assert [group["road"] for group in outbound["groups"]] == ["Edens", "Kennedy"]
     assert inbound["direction"] == "inbound" and outbound["direction"] == "outbound"
 
 
