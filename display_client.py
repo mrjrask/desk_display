@@ -715,6 +715,17 @@ class DisplayClient:
         for x, y in taps:
             self.on_touch(x, y)
 
+    def _tick_indicator_pulse(self) -> None:
+        """LED_INDICATOR_PULSE frames, presented from the playback thread."""
+
+        tick = getattr(self.presenter, "tick_indicator_pulse", None)
+        if not callable(tick):
+            return
+        try:
+            tick()
+        except Exception:  # noqa: BLE001 - a border effect must never stop playback
+            LOGGER.debug("LED border pulse tick failed", exc_info=True)
+
     def wait(self, seconds: float) -> None:
         """Hold or animate the current screen, returning early on a control or stop.
 
@@ -735,6 +746,7 @@ class DisplayClient:
         next_frame_at = started  # the earliest the next animation frame may go out
         while not self._stop.is_set() and self._monotonic() < deadline + motion.lag:
             self._poll_taps()
+            self._tick_indicator_pulse()
             if self._controls_pending():
                 return
             if self._monotonic() >= next_light_check:

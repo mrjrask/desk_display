@@ -73,6 +73,12 @@ class HardwarePresenter:
 
         return set_update_indicator_enabled(not update_indicator_enabled(), self.display)
 
+    def tick_indicator_pulse(self) -> bool:
+        """Advance the LED_INDICATOR_PULSE border while a screen is held."""
+
+        tick = getattr(self.display, "tick_indicator_pulse", None)
+        return bool(tick()) if callable(tick) else False
+
     def apply_indicator_border(self, image: Image.Image) -> Image.Image:
         """*image* with the current indicator border, as saved screenshots show it."""
 

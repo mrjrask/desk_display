@@ -1209,6 +1209,14 @@ def _wait_with_button_checks(
                         can_refresh_display = False
                     last_frame_id = current_frame_id
 
+        # LED_INDICATOR_PULSE: SDL outputs must be presented from this thread.
+        tick_pulse = getattr(display, "tick_indicator_pulse", None)
+        if callable(tick_pulse):
+            try:
+                tick_pulse()
+            except Exception:
+                logging.debug("LED border pulse tick failed", exc_info=True)
+
         remaining = end - time.monotonic()
         if remaining <= 0:
             break
