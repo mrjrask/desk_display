@@ -87,3 +87,28 @@ def test_fetch_games_for_date_refetches_after_cache_expires(monkeypatch):
     nba._fetch_games_for_date(day)
 
     assert calls == [day, day]
+
+
+def test_map_espn_competitor_flattens_schedule_score_objects():
+    # The team schedule endpoint (Bulls Last) sends score as an object.
+    obj = {"team": {"abbreviation": "CHI"}, "score": {"value": 98.0, "displayValue": "98"}}
+    assert nba._map_espn_competitor(obj)["score"] == "98"
+    assert nba._map_espn_competitor({"team": {}, "score": {"value": 101.0}})["score"] == 101
+    assert nba._map_espn_competitor({"team": {}, "score": "110"})["score"] == "110"
+    assert nba._map_espn_competitor({"team": {}})["score"] is None
+
+
+def test_final_schedule_game_keeps_scores_through_map_game():
+    event = {"id": "1", "date": "2026-10-07T01:00Z", "season": {"type": 1, "slug": "preseason"}}
+    competition = {
+        "id": "1",
+        "date": "2026-10-07T01:00Z",
+        "status": {"type": {"state": "post", "completed": True, "name": "STATUS_FINAL"}},
+        "competitors": [
+            {"homeAway": "home", "team": {"abbreviation": "CHI"}, "score": {"value": 98.0, "displayValue": "98"}},
+            {"homeAway": "away", "team": {"abbreviation": "PHX"}, "score": {"value": 105.0, "displayValue": "105"}},
+        ],
+    }
+    mapped = nba._map_game(nba._map_espn_game(event, competition, None))
+    assert str(mapped["teams"]["home"]["score"]) == "98"
+    assert str(mapped["teams"]["away"]["score"]) == "105"

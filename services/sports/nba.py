@@ -349,6 +349,24 @@ def _espn_status_abstract(status_code: str, status: dict[str, Any]) -> str:
     return {"3": "final", "2": "live", "1": "preview"}.get(status_code, "")
 
 
+def _espn_score_value(score: Any) -> Any:
+    """Return a plain score from ESPN's scoreboard (str) or schedule (dict) shape.
+
+    The team schedule endpoint sends ``{"value": 98.0, "displayValue": "98"}``
+    where the scoreboard endpoint sends ``"98"``.
+    """
+
+    if isinstance(score, dict):
+        display = score.get("displayValue")
+        if display not in (None, ""):
+            return display
+        value = score.get("value")
+        if isinstance(value, (int, float)):
+            return int(value)
+        return value if value not in (None, "") else None
+    return score
+
+
 def _map_espn_competitor(comp: dict[str, Any]) -> dict[str, Any]:
     comp = comp or {}
     team = comp.get("team") or {}
@@ -372,7 +390,7 @@ def _map_espn_competitor(comp: dict[str, Any]) -> dict[str, Any]:
         "teamCity": location,
         "teamName": nickname,
         "teamId": team.get("id") or comp.get("id"),
-        "score": comp.get("score"),
+        "score": _espn_score_value(comp.get("score")),
     }
     return mapped
 
