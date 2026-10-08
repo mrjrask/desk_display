@@ -1142,6 +1142,12 @@ MLB_SOX_TEAM_ID    = "145"
 
 NBA_TEAM_ID        = "1610612741"
 NBA_TEAM_TRICODE   = "CHI"
+# NBA and Bulls screens stay hidden until this date (the regular season opens
+# the day after).  Update it each year, or override with NBA_SHOW_FROM=YYYY-MM-DD.
+try:
+    NBA_SHOW_FROM = datetime.date.fromisoformat(os.environ.get("NBA_SHOW_FROM", "2026-10-19").strip())
+except ValueError:
+    NBA_SHOW_FROM = datetime.date(2026, 10, 19)
 NBA_IMAGES_DIR     = os.path.join(IMAGES_DIR, "nba")
 NBA_FALLBACK_LOGO  = os.path.join(NBA_IMAGES_DIR, "NBA.png")
 

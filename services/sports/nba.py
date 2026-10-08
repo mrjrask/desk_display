@@ -541,9 +541,10 @@ _NBA_COM_TO_ESPN_TEAM_ID: dict[str, str] = {
 }
 
 # Without ``seasontype`` ESPN returns only its current season type, so before
-# opening night the regular season is missing (and after the last preseason
-# game nothing is left).  Ask for preseason, regular season and postseason.
-_ESPN_SCHEDULE_SEASON_TYPES = (1, 2, 3)
+# opening night the regular season is missing.  Ask for regular season and
+# postseason explicitly; preseason (type 1) is left out on purpose so Bulls
+# Last/Next only show games that count.
+_ESPN_SCHEDULE_SEASON_TYPES = (2, 3)
 
 
 def espn_team_id(team_id: str) -> str:

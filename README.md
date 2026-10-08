@@ -574,6 +574,7 @@ See [ADS-B stats screen](#ads-b-dashboards) below for how the collector, databas
 | `TEAM_STANDINGS_DISPLAY_SECONDS` | Hold time for team standings pages. |
 | `NCAAM_SCOREBOARD_MODE` | NCAAM scoreboard mode; defaults to `top25`. |
 | `NHL_BREAK_WINDOWS_JSON` | Optional NHL break-window override JSON used by registry helpers. |
+| `NBA_SHOW_FROM` | `YYYY-MM-DD` date before which all NBA and Bulls screens are hidden (default `2026-10-19`). |
 | `SMALL_RESULT_FLAG_H` | Small flag height for MLB result/schedule renderers. |
 | `ON_THIS_DAY_INCOMPLETE_FEED_RETRY_SECONDS` | Retry interval for incomplete Wikimedia daily results; defaults to 300 seconds. |
 | `ON_THIS_DAY_OFFLINE_FALLBACK_RETRY_SECONDS` | Retry interval after all On This Day feeds fail; defaults to 900 seconds. |

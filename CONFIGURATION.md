@@ -519,6 +519,7 @@ installs only, never clients.
 | `AIR_QUALITY_LATITUDE` | server, standalone | restart |  |
 | `AIR_QUALITY_LONGITUDE` | server, standalone | restart |  |
 | `AIR_QUALITY_ENABLE_POLLEN` | server, standalone | restart |  |
+| `NBA_SHOW_FROM` | server, standalone | restart |  |
 | `NCAAM_SCOREBOARD_MODE` | server, standalone | restart |  |
 | `NHL_BREAK_WINDOWS_JSON` | server, standalone | restart |  |
 | `NHL_SCHEDULE_ICS_URL` | server, standalone | restart | provider |

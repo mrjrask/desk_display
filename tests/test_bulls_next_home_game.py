@@ -99,7 +99,7 @@ def _espn_event(event_id, date, home_abbr, away_abbr, home_id, away_id):
     }
 
 
-def test_bulls_next_and_next_home_use_espn_id_and_all_season_types(monkeypatch):
+def test_bulls_next_and_next_home_use_espn_id_and_skip_preseason(monkeypatch):
     """Regression: the schedule was requested with NBA.com's team id
     (1610612741), which ESPN does not know, and without ``seasontype``, so
     before opening night Bulls Next and Next Home both said "no games"."""
@@ -135,9 +135,12 @@ def test_bulls_next_and_next_home_use_espn_id_and_all_season_types(monkeypatch):
     next_game = data_fetch.fetch_bulls_next_game()
     next_home = data_fetch.fetch_bulls_next_home_game()
 
-    assert next_game["gamePk"] == "pre-1"
-    assert next_home["gamePk"] == "reg-1"
-    assert sorted(url.rsplit("seasontype=", 1)[1] for url in requested) == ["1", "2", "3"]
+    # Preseason games are never shown, and are not even requested.
+    assert next_game["gamePk"] == "reg-1"
+    # The next game is the home game, so next-home skips it (the registry falls
+    # back to the next game); the preseason opener is not a candidate either.
+    assert next_home is None
+    assert sorted(url.rsplit("seasontype=", 1)[1] for url in requested) == ["2", "3"]
 
 
 def test_espn_team_id_maps_nba_com_ids():
