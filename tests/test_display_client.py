@@ -1236,3 +1236,24 @@ def test_stalled_stop_after_sigterm_exits_by_force():
 def test_max_fps_setting(value, fps):
     settings = {} if value is None else {"DESK_DISPLAY_CLIENT_MAX_FPS": value}
     assert display_client.client_max_fps(settings) == fps
+
+
+class PulsePresenter(Presenter):
+    def __init__(self):
+        super().__init__()
+        self.ticks = 0
+
+    def tick_indicator_pulse(self):
+        self.ticks += 1
+        return False
+
+
+def test_holding_a_screen_ticks_the_led_border_pulse(env):
+    env.publish("date")
+    client = synced(env, env.make_client())
+    client.presenter = presenter = PulsePresenter()
+
+    _screen, _seconds = client.step()
+    client.wait(0.3)
+
+    assert presenter.ticks >= 3

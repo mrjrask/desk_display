@@ -1295,11 +1295,18 @@ def _get_led_indicator_level() -> float:
 LED_INDICATOR_LEVEL = _get_led_indicator_level()
 
 # LED_INDICATOR_PULSE: the border eases from full brightness down to
-# _INDICATOR_PULSE_MIN_LEVEL and back once per period. About 7 frames a second
-# keeps the fade smooth while only re-sending the frame when nothing else is.
+# _INDICATOR_PULSE_MIN_LEVEL and back once per period. Roughly 10 frames a
+# second keeps the fade smooth while only re-sending the frame when nothing
+# else is. SDL (kernel/window) outputs can only be presented from the thread
+# that owns the window, so there the loop holding a screen calls
+# ``Display.tick_indicator_pulse()`` (every _INDICATOR_PULSE_TICK_SECONDS at
+# most); other outputs use a background thread at _INDICATOR_PULSE_FRAME_SECONDS.
 _INDICATOR_PULSE_PERIOD_SECONDS = 3.0
 _INDICATOR_PULSE_MIN_LEVEL = 0.35
-_INDICATOR_PULSE_FRAME_SECONDS = 0.15
+_INDICATOR_PULSE_FRAME_SECONDS = 0.1
+_INDICATOR_PULSE_TICK_SECONDS = 0.09
+# Brightness steps per full level; a frame is skipped when it would repeat one.
+_INDICATOR_PULSE_STEPS = 128
 
 
 def indicator_pulse_level(elapsed: float) -> float:
@@ -1486,6 +1493,8 @@ class Display:
         self._indicator_pulse_stop = threading.Event()
         self._indicator_pulse_thread: Optional[threading.Thread] = None
         self._indicator_pulse_started_at = 0.0
+        self._indicator_pulse_running = False
+        self._last_pulse_step = -1
         # Composing and writing a frame is serialized so the pulse thread can
         # never push an older buffer after a newer screen has gone out.
         self._present_lock = threading.RLock()
@@ -2345,8 +2354,9 @@ class Display:
         b = _clamp_led_level(b)
         self._led_color = (r, g, b)
         if self._indicator_border_enabled:
-            self._update_display()
+            # Sync first so a newly lit border starts its pulse at full brightness.
             self._sync_indicator_pulse()
+            self._update_display()
 
         if self._display is None or not LED_INDICATOR_ENABLED:  # pragma: no cover - hardware import
             return
@@ -2367,7 +2377,9 @@ class Display:
         # calls cannot mutate a buffer while a previous frame is still being
         # transferred to the panel. Reusing a shared work buffer can surface as
         # partial-frame flicker/tearing near the top edge.
-        return self.apply_indicator_border(self._buffer, level=self._indicator_pulse_level())
+        level = self._indicator_pulse_level()
+        self._last_pulse_step = round(level * _INDICATOR_PULSE_STEPS)
+        return self.apply_indicator_border(self._buffer, level=level)
 
     def apply_indicator_border(self, img: Image.Image, level: float = 1.0) -> Image.Image:
         """Return *img* with the LED notification border overlay, when enabled.
@@ -2420,19 +2432,27 @@ class Display:
         return indicator_pulse_level(elapsed)
 
     def _sync_indicator_pulse(self) -> None:
-        """Start the pulse thread while a pulsing border is lit.
+        """Begin (or end) a pulse as the border lights (or goes dark).
 
-        The thread stops on its own once the border goes dark, so a static
-        border (or LED_INDICATOR_PULSE=0) costs nothing.
+        A background thread drives the frames on outputs that can be written
+        from any thread. SDL outputs are driven by ``tick_indicator_pulse()``
+        from the loop that holds the screen, because presenting from another
+        thread never reaches the panel there. Either way a static border (or
+        LED_INDICATOR_PULSE=0) costs nothing.
         """
 
         if not getattr(self, "_indicator_pulse_enabled", False):
             return
         with self._indicator_pulse_lock:
-            if not self._indicator_pulse_active() or self._indicator_pulse_thread is not None:
+            if not self._indicator_pulse_active():
+                self._indicator_pulse_running = False
                 return
-            # Start at full brightness, so a new notification appears at once.
-            self._indicator_pulse_started_at = time.monotonic()
+            if not self._indicator_pulse_running:
+                # Start at full brightness, so a new notification appears at once.
+                self._indicator_pulse_running = True
+                self._indicator_pulse_started_at = time.monotonic()
+            if self._uses_kernel_output or self._indicator_pulse_thread is not None:
+                return
             thread = threading.Thread(
                 target=self._run_indicator_pulse,
                 name="led-border-pulse",
@@ -2441,6 +2461,37 @@ class Display:
             self._indicator_pulse_thread = thread
             thread.start()
 
+    def _present_pulse_frame(self, min_gap: float) -> bool:
+        """Re-send the frame at the current pulse level if one is due."""
+
+        if not self._indicator_pulse_active():
+            return False
+        # Screens that animate already carry the current pulse level in every
+        # frame; only re-send the frame when the panel has been idle.
+        if time.monotonic() - self._last_present_at < min_gap:
+            return False
+        if round(self._indicator_pulse_level() * _INDICATOR_PULSE_STEPS) == self._last_pulse_step:
+            return False
+        self._update_display()
+        return True
+
+    def tick_indicator_pulse(self) -> bool:
+        """Advance the border pulse; call it from the loop that holds a screen.
+
+        Returns True when a frame went out. Cheap when there is nothing to do
+        (pulse off, border dark, a frame just presented, no visible change).
+        """
+
+        if not getattr(self, "_indicator_pulse_enabled", False):
+            return False
+        if not self._indicator_pulse_running:
+            self._sync_indicator_pulse()
+        try:
+            return self._present_pulse_frame(_INDICATOR_PULSE_TICK_SECONDS)
+        except Exception as exc:  # pragma: no cover - hardware import
+            logging.debug("LED border pulse frame failed: %s", exc)
+            return False
+
     def _run_indicator_pulse(self) -> None:
         interval = _INDICATOR_PULSE_FRAME_SECONDS
         while not self._indicator_pulse_stop.wait(interval):
@@ -2448,12 +2499,8 @@ class Display:
                 if not self._indicator_pulse_active():
                     self._indicator_pulse_thread = None
                     return
-            # Screens that animate already carry the current pulse level in
-            # every frame; only re-send the frame when the panel has been idle.
-            if time.monotonic() - self._last_present_at < interval:
-                continue
             try:
-                self._update_display()
+                self._present_pulse_frame(interval)
             except Exception as exc:  # pragma: no cover - hardware import
                 logging.debug("LED border pulse frame failed: %s", exc)
         with self._indicator_pulse_lock:
