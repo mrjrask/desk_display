@@ -1095,6 +1095,8 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
     register("vrnof", lambda: draw_vrnof_screen(context.display, transition=True))
 
     scoreboards_available = not (context.offline and context.skip_scoreboards)
+    # NBA and Bulls screens stay hidden until the new season is about to start.
+    nba_screens_hidden = context.now.date() < config.NBA_SHOW_FROM
     scoreboards = (context.cache.get("scoreboards") or {})
     mlb_scoreboard_games = scoreboards.get("mlb") or []
     raw_nhl_scoreboard_games = scoreboards.get("nhl")
@@ -1346,7 +1348,11 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
         image = context.logos.get(screen_id)
         if image is None:
             return
-        register(screen_id, lambda img=image: _show_logo(context.display, img, profile), available=True)
+        register(
+            screen_id,
+            lambda img=image: _show_logo(context.display, img, profile),
+            available=not (screen_id in {"bulls logo", "nba logo"} and nba_screens_hidden),
+        )
 
     for base_logo in (
         "bears logo",
@@ -2073,7 +2079,7 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
             (context.cache.get("scoreboards") or {}).get("nba") or [],
             transition=True,
         ),
-        available=scoreboards_available,
+        available=scoreboards_available and not nba_screens_hidden,
     )
     register(
         "NBA Scoreboard v2",
@@ -2094,12 +2100,13 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
                 )
             )
         ),
-        available=scoreboards_available,
+        available=scoreboards_available and not nba_screens_hidden,
     )
     nba_playoffs = None if context.allow_upstream_requests else (context.cache.get("nba_playoffs") or {})
     register(
         "NBA Playoffs",
         lambda: render_nba_playoffs(context.display, nba_playoffs, transition=True),
+        available=not nba_screens_hidden,
     )
     register(
         "NCAA Mens BB Scoreboard",
@@ -2171,7 +2178,7 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
                 screen_id="bulls stand1",
                 transition=True,
             ),
-            available=True,
+            available=not nba_screens_hidden,
         )
 
     register(
@@ -2179,28 +2186,28 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
         lambda data=bulls.get("last"): draw_last_bulls_game(
             context.display, data, transition=True
         ),
-        available=True,
+        available=not nba_screens_hidden,
     )
     register(
         "bulls live",
         lambda data=bulls.get("live"): draw_live_bulls_game(
             context.display, data, transition=True
         ),
-        available=_is_live_game_today(bulls.get("live")),
+        available=_is_live_game_today(bulls.get("live")) and not nba_screens_hidden,
     )
     register(
         "bulls next",
         lambda data=bulls_next: draw_sports_screen_bulls(
             context.display, data, transition=True
         ),
-        available=True,
+        available=not nba_screens_hidden,
     )
     register(
         "bulls next home",
         lambda data=bulls_next_home: draw_bulls_next_home_game(
             context.display, data, transition=True
         ),
-        available=True,
+        available=not nba_screens_hidden,
     )
     register(
         "bulls schedule quad",
@@ -2215,7 +2222,8 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
             transition=True,
             scroll_speed=scroll_speed,
         ),
-        available=bool(bulls.get("stand"))
+        available=not nba_screens_hidden
+        and bool(bulls.get("stand"))
         and bool(bulls.get("last"))
         and bool(bulls_next)
         and bool(bulls_next_home),

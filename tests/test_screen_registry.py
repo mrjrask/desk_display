@@ -1678,6 +1678,7 @@ def test_quad_layout_excludes_nested_quad_composite_tiles(monkeypatch):
 
 
 def test_bulls_schedule_quad_uses_expected_tile_selection(monkeypatch):
+    monkeypatch.setattr(registry_module.config, "NBA_SHOW_FROM", datetime.date(2000, 1, 1))
     now = datetime.datetime(2024, 1, 1, 12, 0, tzinfo=CENTRAL_TIME)
     weather = {"hourly": []}
     context = _make_context(
@@ -2160,3 +2161,43 @@ def test_wolves_live_from_yesterday_expires_in_the_morning():
     )
 
     assert registry["wolves live"].available is False
+
+
+_NBA_SCREEN_IDS = (
+    "NBA Scoreboard",
+    "NBA Scoreboard v2",
+    "NBA Playoffs",
+    "bulls stand1",
+    "bulls last",
+    "bulls next",
+    "bulls next home",
+    "bulls schedule quad",
+)
+
+
+def _bulls_registry(day: datetime.date):
+    now = datetime.datetime(day.year, day.month, day.day, 12, 0, tzinfo=CENTRAL_TIME)
+    bulls = {
+        "stand": {"x": 1},
+        "last": {"id": 1},
+        "next": {"id": 2},
+        "next_home": {"id": 3},
+    }
+    registry, _ = build_screen_registry(
+        _make_context({"hourly": []}, now, cache_updates={"bulls": bulls})
+    )
+    return registry
+
+
+def test_nba_and_bulls_screens_hidden_before_show_from_date(monkeypatch):
+    monkeypatch.setattr(registry_module.config, "NBA_SHOW_FROM", datetime.date(2026, 10, 19))
+    registry = _bulls_registry(datetime.date(2026, 10, 18))
+    for screen_id in _NBA_SCREEN_IDS:
+        assert registry[screen_id].available is False, screen_id
+
+
+def test_nba_and_bulls_screens_return_on_show_from_date(monkeypatch):
+    monkeypatch.setattr(registry_module.config, "NBA_SHOW_FROM", datetime.date(2026, 10, 19))
+    registry = _bulls_registry(datetime.date(2026, 10, 19))
+    for screen_id in _NBA_SCREEN_IDS:
+        assert registry[screen_id].available is True, screen_id
