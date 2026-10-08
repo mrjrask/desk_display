@@ -10,12 +10,16 @@
         min-height: 100vh;
         display: grid;
         place-items: center;
+        padding: 1rem;
+        box-sizing: border-box;
         font-family: Arial, sans-serif;
         background: #f3f4f6;
       }
 
       .card {
-        width: min(360px, calc(100vw - 2rem));
+        box-sizing: border-box;
+        width: 100%;
+        max-width: 400px;
         background: #fff;
         border-radius: 12px;
         box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
@@ -31,6 +35,7 @@
       input,
       button {
         display: block;
+        box-sizing: border-box;
         width: 100%;
       }
 
@@ -58,6 +63,7 @@
         margin: 0 0 0.75rem;
       }
     </style>
+      {% include "_mobile_style.html" %}
   </head>
   <body>
     <form class="card" method="post" action="{{ url_for('login') }}">

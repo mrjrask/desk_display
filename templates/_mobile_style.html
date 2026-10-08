@@ -1,0 +1,33 @@
+<style>
+  /* Phone / narrow-window rules shared by every config UI page. Everything is
+     inside max-width/max-height queries (or is neutral on wide screens), so the
+     desktop and landscape-iPad layouts are unchanged. */
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+  img, svg, video, canvas { max-width: 100%; }
+  pre, code { overflow-wrap: anywhere; }
+  @media (max-width: 900px) {
+    body { padding: 1rem; }
+    /* 16px form fields stop iOS Safari zooming the page when one is focused. */
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea { font-size: 16px !important; }
+    .panel { padding: 0.9rem; }
+    .table-wrap { -webkit-overflow-scrolling: touch; }
+  }
+  @media (max-width: 600px) {
+    body { padding: 0.75rem; }
+    h1 { font-size: 1.4rem; }
+    header { margin-bottom: 1.2rem; }
+    .subtitle { font-size: 0.85rem; }
+    .nav-links { gap: 0.4rem; margin-bottom: 0.9rem; }
+    .nav-links a { display: inline-flex; align-items: center; min-height: 40px; padding: 0.3rem 0.8rem; }
+    button, .btn, .btn-secondary, select,
+    input[type="text"], input[type="search"], input[type="number"], input[type="password"] { min-height: 40px; }
+    .panel { padding: 0.75rem; border-radius: 12px; }
+    .sticky-bar, .toolbar { position: static; }
+    table { font-size: 0.82rem; }
+    td[colspan] { white-space: normal; }
+  }
+  /* A phone held sideways has little height: a sticky toolbar would eat a quarter of it. */
+  @media (max-height: 500px) and (max-width: 950px) {
+    .sticky-bar, .toolbar { position: static; }
+  }
+</style>
