@@ -1581,6 +1581,11 @@ def _blackhawks_game_is_past(game: Dict[str, Any], now: Optional[datetime.dateti
     return game.get("gameState") == "OFF"
 
 
+def _blackhawks_game_in_play_window(game: Dict[str, Any], now: datetime.datetime) -> bool:
+    start = _blackhawks_game_start_utc(game)
+    return start is not None and start <= now < start + _BLACKHAWKS_GAME_DURATION
+
+
 def fetch_blackhawks_next_game():
     try:
         games = _fetch_blackhawks_schedule_games()
@@ -2524,8 +2529,15 @@ _BLACKHAWKS_LIVE_WINDOW_STATES = (
 def fetch_blackhawks_live_game():
     try:
         games = _fetch_blackhawks_schedule_games()
+        now = datetime.datetime.now(pytz.UTC)
         for g in games:
             state = g.get("gameState", "").lower()
+            if state in ("fut", "") and _blackhawks_game_in_play_window(g, now):
+                # ICS schedule entries are always tagged "FUT" (no live data),
+                # so infer "live" from the start time; the live screen then
+                # confirms against the NHL feed when it renders.
+                g = {**g, "gameState": "LIVE"}
+                state = "live"
             if state in _BLACKHAWKS_LIVE_WINDOW_STATES:
                 if not g.get("startTimeCentral"):
                     utc = g.get("startTimeUTC")
