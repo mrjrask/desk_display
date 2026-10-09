@@ -283,6 +283,8 @@ class ScreenRenderer:
             raise ScreenUnavailable(f"Screen is not available: {screen_id}")
         result = definition.render()
         metadata: dict[str, Any] = dict(getattr(definition, "metadata", {}) or {})
+        if metadata.pop("unavailable_if_empty", False) and result is None:
+            raise ScreenUnavailable(f"Screen has nothing to show: {screen_id}")
         if isinstance(result, ScreenImage):
             # A display-sized explicit still can represent an animation's
             # settled state (for example, a centred logo).  A taller explicit

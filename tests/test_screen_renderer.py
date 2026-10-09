@@ -1,3 +1,4 @@
+import pytest
 """Tests for the hardware-free rendering boundary."""
 
 import importlib
@@ -264,3 +265,24 @@ def test_screen_led_override_is_sent_at_full_scale(monkeypatch):
 
     assert renderer.render("alert", *args).metadata["led"] == [1.0, 0.5, 0.0]
     assert "led" not in renderer.render("plain", *args).metadata
+
+
+def test_empty_render_withdraws_screen_marked_unavailable_if_empty():
+    from remote_display.models import ScreenUnavailable
+
+    def registry_factory(capture, profile, preferences, data):
+        return {
+            "live": SimpleNamespace(
+                available=True, metadata={"unavailable_if_empty": True}, render=lambda: None
+            ),
+            "plain": SimpleNamespace(available=True, metadata={}, render=lambda: None),
+        }
+
+    args = (
+        PROFILE_PRESETS[DISPLAY_PROFILE_DISPLAY_HAT_MINI],
+        ServerPreferenceSnapshot(revision=1),
+        DataCoordinator().snapshot(),
+    )
+    with pytest.raises(ScreenUnavailable):
+        ScreenRenderer(registry_factory).render("live", *args)
+    assert ScreenRenderer(registry_factory).render("plain", *args).image is not None

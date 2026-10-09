@@ -1487,6 +1487,10 @@ def build_screen_registry(context: ScreenContext) -> tuple[dict[str, ScreenDefin
                 context.display, data, transition=True
             ),
             available=_is_live_game_today(hawks.get("live")),
+            # The live card is only a guess from the start time until the feed
+            # confirms it; if the game is over the draw returns None, which
+            # must withdraw the screen rather than serve a blank image.
+            unavailable_if_empty=True,
         )
         register(
             "hawks next",

@@ -2781,6 +2781,10 @@ def main_loop():
             screenshot_img = None
             ticker_data = None
 
+            if result is None and (getattr(entry, "metadata", None) or {}).get("unavailable_if_empty"):
+                logging.info("Screen '%s' has nothing to show; skipping.", sid)
+                continue
+
             if result is None:
                 logging.info(
                     "Screen '%s' returned no image; using current display buffer for outputs.",
