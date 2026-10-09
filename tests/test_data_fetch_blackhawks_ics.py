@@ -203,3 +203,30 @@ def test_fetch_blackhawks_live_game_treats_crit_as_live(monkeypatch):
 
     assert result is game
     assert result["startTimeCentral"] == "7:00 PM"
+
+
+def test_fetch_blackhawks_live_game_infers_live_from_ics_fut_during_game(monkeypatch):
+    now = datetime.datetime(2026, 10, 9, 1, 0, tzinfo=pytz.UTC)
+    game = {
+        "gameDate": "2026-10-09T00:00:00Z",
+        "gameState": "FUT",
+        "startTimeUTC": "2026-10-09T00:00:00Z",
+        "officialDate": "2026-10-08",
+    }
+    future = {**game, "gameDate": "2026-10-12T00:00:00Z", "startTimeUTC": "2026-10-12T00:00:00Z"}
+    monkeypatch.setattr(data_fetch, "_fetch_blackhawks_schedule_games", lambda: [future, game])
+    monkeypatch.setattr(data_fetch.datetime, "datetime", _FixedDatetime(now))
+
+    result = data_fetch.fetch_blackhawks_live_game()
+
+    assert result["gameState"] == "LIVE"
+    assert result["startTimeUTC"] == game["startTimeUTC"]
+
+
+def test_fetch_blackhawks_live_game_ignores_fut_before_start(monkeypatch):
+    now = datetime.datetime(2026, 10, 8, 20, 0, tzinfo=pytz.UTC)
+    game = {"gameDate": "2026-10-09T00:00:00Z", "gameState": "FUT", "startTimeUTC": "2026-10-09T00:00:00Z"}
+    monkeypatch.setattr(data_fetch, "_fetch_blackhawks_schedule_games", lambda: [game])
+    monkeypatch.setattr(data_fetch.datetime, "datetime", _FixedDatetime(now))
+
+    assert data_fetch.fetch_blackhawks_live_game() is None
