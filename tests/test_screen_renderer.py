@@ -1,9 +1,9 @@
-import pytest
 """Tests for the hardware-free rendering boundary."""
 
 import importlib
 from types import SimpleNamespace
 
+import pytest
 from PIL import Image
 
 import screens.mlb_league_standings as mlb_standings
