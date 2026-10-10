@@ -3,6 +3,10 @@
 import importlib
 import sys
 
+import pytest
+
+import screens.draw_hawks_schedule as hawks
+
 
 class _DisplayWithFrameCounter:
     def __init__(self, value):
@@ -68,3 +72,26 @@ def test_wait_with_button_checks_flushes_when_frame_changes(monkeypatch):
 
     assert main._wait_with_button_checks(0.1) is False
     assert display.shows == 1
+
+
+def test_hawks_live_feed_resolves_nhl_id_instead_of_ics_uid(monkeypatch):
+    main = _load_main()
+    requested = []
+    monkeypatch.setattr(hawks, "fetch_schedule", lambda days_back, days_fwd: {"s": 1})
+    monkeypatch.setattr(hawks, "classify_games", lambda s: ({"gamePk": 2025020123}, None, None))
+    monkeypatch.setattr(
+        hawks, "fetch_game_feed", lambda pk: requested.append(pk) or {"homeScore": 1}
+    )
+
+    feed = main._fetch_hawks_live_feed({"id": "abc@ecal.com", "gamePk": "abc@ecal.com"})
+
+    assert feed == {"homeScore": 1}
+    assert requested == [2025020123]
+
+
+def test_hawks_live_feed_skips_non_numeric_id_without_schedule_match(monkeypatch):
+    main = _load_main()
+    monkeypatch.setattr(hawks, "fetch_schedule", lambda days_back, days_fwd: None)
+    monkeypatch.setattr(hawks, "fetch_game_feed", lambda pk: pytest.fail("must not fetch"))
+
+    assert main._fetch_hawks_live_feed({"id": "abc@ecal.com"}) is None
