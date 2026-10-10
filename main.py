@@ -2313,11 +2313,28 @@ def _fetch_hawks_live_feed(live_game: Optional[Dict[str, Any]]) -> Optional[Dict
     """
     if not isinstance(live_game, dict):
         return None
-    game_pk = live_game.get("id") or live_game.get("gamePk")
-    if not game_pk:
-        return None
     try:
-        from screens.draw_hawks_schedule import fetch_game_feed
+        from screens.draw_hawks_schedule import (
+            classify_games,
+            fetch_game_feed,
+            fetch_schedule,
+        )
+
+        # The cached game comes from the ICS calendar, whose id is a calendar
+        # UID rather than an NHL game id, so look the real id up the same way
+        # the "hawks live" screen does.
+        game_pk = None
+        sched = fetch_schedule(days_back=1, days_fwd=1)
+        if sched:
+            live, _, _ = classify_games(sched)
+            if isinstance(live, dict):
+                game_pk = live.get("gamePk") or live.get("id")
+        if not game_pk:
+            candidate = live_game.get("gamePk") or live_game.get("id")
+            if str(candidate or "").isdigit():
+                game_pk = candidate
+        if not game_pk:
+            return None
         return fetch_game_feed(game_pk)
     except Exception as exc:
         logging.debug("Failed to fetch Blackhawks live feed for OLED: %s", exc)
