@@ -2303,48 +2303,8 @@ def _refresh_bears() -> None:
     cache["bears"].update(data_coordinator.read_legacy_team("bears"))
 
 
-def _fetch_hawks_live_feed(live_game: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-    """Fetch period/clock detail for a live Blackhawks game, if any.
-
-    The schedule-level game payload cached for ``hawks.live`` doesn't carry
-    the current period or clock, so pull the richer boxscore/landing feed
-    (the same one the main "hawks live" screen renders) and cache it
-    alongside so the OLED helper can show it without its own network call.
-    """
-    if not isinstance(live_game, dict):
-        return None
-    try:
-        from screens.draw_hawks_schedule import (
-            classify_games,
-            fetch_game_feed,
-            fetch_schedule,
-        )
-
-        # The cached game comes from the ICS calendar, whose id is a calendar
-        # UID rather than an NHL game id, so look the real id up the same way
-        # the "hawks live" screen does.
-        game_pk = None
-        sched = fetch_schedule(days_back=1, days_fwd=1)
-        if sched:
-            live, _, _ = classify_games(sched)
-            if isinstance(live, dict):
-                game_pk = live.get("gamePk") or live.get("id")
-        if not game_pk:
-            candidate = live_game.get("gamePk") or live_game.get("id")
-            if str(candidate or "").isdigit():
-                game_pk = candidate
-        if not game_pk:
-            return None
-        return fetch_game_feed(game_pk)
-    except Exception as exc:
-        logging.debug("Failed to fetch Blackhawks live feed for OLED: %s", exc)
-        return None
-
-
 def _refresh_hawks() -> None:
-    payload = data_coordinator.read_legacy_team("hawks")
-    payload["live_feed"] = _fetch_hawks_live_feed(payload.get("live"))
-    cache["hawks"].update(payload)
+    cache["hawks"].update(data_coordinator.read_legacy_team("hawks"))
 
 
 def _refresh_wolves() -> None:

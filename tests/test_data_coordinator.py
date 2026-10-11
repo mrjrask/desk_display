@@ -1,8 +1,12 @@
 """Tests for coordinated snapshot sources."""
 
+
+import data_fetch
+import screens.draw_hawks_schedule as hawks
 import screens.nfl_standings as nfl_standings
 import screens.nhl_standings as nhl_standings
-from services.data_coordinator import DataCoordinator
+from services import data_coordinator
+from services.data_coordinator import DataCoordinator, fetch_hawks_live_feed
 from services.data_provider import DataProvider
 
 
@@ -129,3 +133,47 @@ def test_snapshot_reuses_the_values_frozen_at_publish(monkeypatch):
     snapshot = coordinator.snapshot()
     assert snapshot.values["scores"]["games"] == ({"id": 1},)
     assert snapshot.revision == coordinator.snapshot().revision
+
+
+def test_hawks_live_feed_resolves_nhl_id_instead_of_ics_uid(monkeypatch):
+    requested = []
+    monkeypatch.setattr(hawks, "fetch_schedule", lambda days_back, days_fwd: {"s": 1})
+    monkeypatch.setattr(hawks, "classify_games", lambda s: ({"gamePk": 2025020123}, None, None))
+    monkeypatch.setattr(
+        hawks, "fetch_game_feed", lambda pk: requested.append(pk) or {"homeScore": 1}
+    )
+
+    feed = fetch_hawks_live_feed({"id": "abc@ecal.com", "gamePk": "abc@ecal.com"})
+
+    assert feed == {"homeScore": 1}
+    assert requested == [2025020123]
+
+
+def _forbidden():
+    raise AssertionError("must not fetch")
+
+
+def test_hawks_live_feed_skips_non_numeric_id_without_schedule_match(monkeypatch):
+    monkeypatch.setattr(hawks, "fetch_schedule", lambda days_back, days_fwd: None)
+    monkeypatch.setattr(hawks, "fetch_game_feed", lambda pk: _forbidden())
+
+    assert fetch_hawks_live_feed({"id": "abc@ecal.com"}) is None
+
+
+def test_hawks_team_feed_includes_live_feed(monkeypatch):
+    live = {"id": "abc@ecal.com"}
+    feed = {"awayScore": 1, "homeScore": 2, "perOrdinal": 2, "clock": "05:12"}
+    for name, value in {
+        "fetch_blackhawks_live_game": live,
+        "fetch_blackhawks_standings": {},
+        "fetch_blackhawks_last_game": None,
+        "fetch_blackhawks_next_game": None,
+        "fetch_blackhawks_next_home_game": None,
+    }.items():
+        monkeypatch.setattr(data_fetch, name, lambda value=value: value)
+    monkeypatch.setattr(data_coordinator, "fetch_hawks_live_feed", lambda game: feed)
+
+    coordinator = DataCoordinator(DataProvider())
+    coordinator.read_legacy_team("hawks", force=True)
+
+    assert coordinator.snapshot().values["hawks"]["live_feed"]["clock"] == "05:12"
