@@ -9,6 +9,7 @@ from __future__ import annotations
 import copy
 import logging
 import threading
+import time
 from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -18,43 +19,62 @@ from typing import Any
 import data_fetch
 from services.data_provider import DataProvider, provider
 
+# A failed lookup keeps the last good feed this long, so one NHL hiccup
+# doesn't blank the OLED scores mid-game.
+_HAWKS_FEED_GRACE_SECONDS = 600
+_hawks_last_feed: tuple[str, dict[str, Any], float] | None = None
+
+
+def _hawks_game_pk(live_game: Mapping[str, Any], schedule: Any) -> Any:
+    """The NHL game id for the ICS-sourced *live_game*, or None."""
+
+    from screens.draw_hawks_schedule import classify_games
+
+    if schedule:
+        live, _, _ = classify_games(schedule)
+        if isinstance(live, Mapping):
+            return live.get("gamePk") or live.get("id")
+        # The NHL schedule may not call the game "live" (intermission, just
+        # ended), so match it to the calendar entry by start time.
+        start = live_game.get("startTimeUTC") or live_game.get("gameDate")
+        for day in schedule.get("dates", []):
+            for game in day.get("games", []):
+                if start and game.get("gameDate") == start:
+                    return game.get("gamePk") or game.get("id")
+    candidate = live_game.get("gamePk") or live_game.get("id")
+    return candidate if str(candidate or "").isdigit() else None
+
 
 def fetch_hawks_live_feed(live_game: Mapping[str, Any] | None) -> dict[str, Any] | None:
-    """Fetch period/clock detail for a live Blackhawks game, if any.
+    """Fetch score, period and clock for a live Blackhawks game, if any.
 
-    The schedule-level game payload cached for ``hawks.live`` doesn't carry
-    the current period or clock, so pull the richer boxscore/landing feed
-    (the same one the main "hawks live" screen renders) and cache it
-    alongside so the OLED helper can show it without its own network call.
+    The cached ``hawks.live`` game comes from the ICS calendar and carries no
+    score, period or clock, and its id is a calendar UID rather than an NHL
+    game id. Look the real id up the way the "hawks live" screen does, then
+    pull the same boxscore feed so the side OLEDs can show it from the
+    heartbeat without their own network calls.
     """
+    global _hawks_last_feed
+
     if not isinstance(live_game, Mapping):
         return None
+    key = str(live_game.get("startTimeUTC") or live_game.get("id") or "")
+    feed = None
     try:
-        from screens.draw_hawks_schedule import (
-            classify_games,
-            fetch_game_feed,
-            fetch_schedule,
-        )
+        from screens.draw_hawks_schedule import fetch_game_feed, fetch_schedule
 
-        # The cached game comes from the ICS calendar, whose id is a calendar
-        # UID rather than an NHL game id, so look the real id up the same way
-        # the "hawks live" screen does.
-        game_pk = None
-        sched = fetch_schedule(days_back=1, days_fwd=1)
-        if sched:
-            live, _, _ = classify_games(sched)
-            if isinstance(live, dict):
-                game_pk = live.get("gamePk") or live.get("id")
-        if not game_pk:
-            candidate = live_game.get("gamePk") or live_game.get("id")
-            if str(candidate or "").isdigit():
-                game_pk = candidate
-        if not game_pk:
-            return None
-        return fetch_game_feed(game_pk)
+        game_pk = _hawks_game_pk(live_game, fetch_schedule(days_back=1, days_fwd=1))
+        feed = fetch_game_feed(game_pk) if game_pk else None
     except Exception as exc:
         logging.debug("Failed to fetch Blackhawks live feed for OLED: %s", exc)
-        return None
+    now = time.monotonic()
+    if feed:
+        _hawks_last_feed = (key, feed, now)
+        return feed
+    last = _hawks_last_feed
+    if last and last[0] == key and now - last[2] < _HAWKS_FEED_GRACE_SECONDS:
+        return last[1]
+    return None
 
 
 def _freeze(value: Any) -> Any:
