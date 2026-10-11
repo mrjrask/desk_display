@@ -275,6 +275,7 @@ SCOREBOARD_SCREEN_TO_LEAGUES: dict[str, set[str]] = {
 }
 
 LIVE_TEAM_SCREEN_TO_FEED: dict[str, str] = {
+    "hawks live": "hawks",
     "cubs live": "cubs",
     "sox live": "sox",
 }

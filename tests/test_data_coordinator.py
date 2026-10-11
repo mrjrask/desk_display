@@ -1,5 +1,6 @@
 """Tests for coordinated snapshot sources."""
 
+import pytest
 
 import data_fetch
 import screens.draw_hawks_schedule as hawks
@@ -147,6 +148,38 @@ def test_hawks_live_feed_resolves_nhl_id_instead_of_ics_uid(monkeypatch):
 
     assert feed == {"homeScore": 1}
     assert requested == [2025020123]
+
+
+@pytest.fixture(autouse=True)
+def _reset_hawks_feed_cache(monkeypatch):
+    monkeypatch.setattr(data_coordinator, "_hawks_last_feed", None)
+
+
+def test_hawks_live_feed_matches_calendar_game_by_start_time(monkeypatch):
+    requested = []
+    schedule = {"dates": [{"games": [{"gamePk": 77, "gameDate": "2026-10-10T00:00:00Z"}]}]}
+    monkeypatch.setattr(hawks, "fetch_schedule", lambda days_back, days_fwd: schedule)
+    monkeypatch.setattr(hawks, "classify_games", lambda s: (None, None, None))
+    monkeypatch.setattr(hawks, "fetch_game_feed", lambda pk: requested.append(pk) or {"clock": "1"})
+
+    game = {"id": "abc@ecal.com", "startTimeUTC": "2026-10-10T00:00:00Z"}
+
+    assert fetch_hawks_live_feed(game) == {"clock": "1"}
+    assert requested == [77]
+
+
+def test_hawks_live_feed_keeps_last_good_feed_when_a_fetch_fails(monkeypatch):
+    game = {"id": "abc@ecal.com", "startTimeUTC": "2026-10-10T00:00:00Z"}
+    monkeypatch.setattr(hawks, "fetch_schedule", lambda days_back, days_fwd: {"s": 1})
+    monkeypatch.setattr(hawks, "classify_games", lambda s: ({"gamePk": 5}, None, None))
+    monkeypatch.setattr(hawks, "fetch_game_feed", lambda pk: {"clock": "10:00"})
+    assert fetch_hawks_live_feed(game)["clock"] == "10:00"
+
+    monkeypatch.setattr(hawks, "fetch_game_feed", lambda pk: None)
+    assert fetch_hawks_live_feed(game)["clock"] == "10:00"
+
+    monkeypatch.setattr(data_coordinator, "_HAWKS_FEED_GRACE_SECONDS", -1)
+    assert fetch_hawks_live_feed(game) is None
 
 
 def _forbidden():
