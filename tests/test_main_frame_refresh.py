@@ -3,10 +3,6 @@
 import importlib
 import sys
 
-import pytest
-
-import screens.draw_hawks_schedule as hawks
-
 
 class _DisplayWithFrameCounter:
     def __init__(self, value):
